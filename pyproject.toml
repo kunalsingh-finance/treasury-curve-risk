@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "treasury-curve-risk"
+version = "1.0.0"
+description = "Dated Treasury pricing, constrained hedging and audited research accounting"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy==2.3.5", "scipy==1.16.3", "pandas==2.2.3", "matplotlib==3.10.7", "streamlit==1.55.0"]
+
+[tool.setuptools.packages.find]
+include = ["treasury_risk*"]

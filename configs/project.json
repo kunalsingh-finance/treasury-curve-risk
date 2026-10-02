@@ -1,0 +1,17 @@
+{
+  "project": "Treasury Curve, Bond Pricing and Hedge Engine",
+  "chat_title": "Build Treasury Curve and Hedge Engine",
+  "root": "treasury-curve-risk",
+  "distinct_from": {
+    "chat_title": "Find top finance project ideas",
+    "project": "Structured Credit Research Platform",
+    "root": "structured-credit-research"
+  },
+  "version": "1.0.0",
+  "valuation_basis": "Dated, officially sourced Treasury terms with hypothetical holdings and fitted-curve dirty marks",
+  "key_rate_nodes_years": [0.5, 1, 2, 3, 5, 7, 10, 20, 30],
+  "historical_evaluation": "Separate 2022 and 2023 dated coupon/principal/collateral/cash/funding ledgers; monthly decisions use prior curves and covariance; revised-vintage hypothetical execution",
+  "release_entry": "outputs/release/report.html",
+  "dashboard_entry": "app.py",
+  "legacy_diagnostic": "outputs/report.html retains the initial undated fixed-tenor comparison"
+}

@@ -1,0 +1,34 @@
+{
+  "version": "1.0.0",
+  "status": "complete_research_release",
+  "files": {
+    "release.json": {
+      "sha256": "98ad338c790b3cc1513a1faa76a3df7132396fffe2474c5928ae5379deeb2209",
+      "bytes": 4712789
+    },
+    "report.html": {
+      "sha256": "2d4672518f141a46b999d1a75e0a3a85212a8f9696b10f3f71f13758a00251c1",
+      "bytes": 11583
+    },
+    "risk_and_factors.png": {
+      "sha256": "aa02af89720db5419b526c19f2f916529075043d0978a3e7408e47a2f2685e0a",
+      "bytes": 182403
+    },
+    "wealth_2022.png": {
+      "sha256": "6308e41d6faef844386ece18c1dabec250c148b701a678bb4162e61c9ee47e51",
+      "bytes": 188840
+    },
+    "wealth_2023.png": {
+      "sha256": "2626772a31c7aa1e140163319edc1c846f54e343f4d9c883a596078af5dfe090",
+      "bytes": 218973
+    },
+    "ledger_2022.csv": {
+      "sha256": "24b7cde7da61a2be969d1c1eb7959a77530357872b968021b45d1c1d446f358b",
+      "bytes": 353493
+    },
+    "ledger_2023.csv": {
+      "sha256": "f46ebfc7add731ee9f83eee54b49bd8ca2ab1b9e3eb044200e5920cafa2491d2",
+      "bytes": 355011
+    }
+  }
+}
