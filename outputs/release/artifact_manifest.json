@@ -1,14 +1,14 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "status": "complete_research_release",
   "files": {
     "release.json": {
-      "sha256": "210a360c4c912d918f376350e2a4d74b5580828c80e7946232292b601b545388",
-      "bytes": 4720361
+      "sha256": "b926b91010da6392c9fd2467975c906dbf560032323bbe5641bdaad6a8adbf4e",
+      "bytes": 4720360
     },
     "report.html": {
-      "sha256": "2d4672518f141a46b999d1a75e0a3a85212a8f9696b10f3f71f13758a00251c1",
-      "bytes": 11583
+      "sha256": "087cdb6465dfcc5ec037008b45bce2e24798f37aebea9a63439fd2f5e9d12f6f",
+      "bytes": 11581
     },
     "risk_and_factors.png": {
       "sha256": "aa02af89720db5419b526c19f2f916529075043d0978a3e7408e47a2f2685e0a",

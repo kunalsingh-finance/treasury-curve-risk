@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import sys
+import tomllib
 from uuid import uuid4
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from treasury_risk.data import load_gsw, validate_source_manifest
 from treasury_risk.research import code_fingerprint, latest_analysis, load_instrument_config, simulate_period
 from treasury_risk.release_report import charts, render_release
 from scripts.verify_release import ARTIFACT_NAMES, verify_pack, verify
+from scripts.publication_lock import publication_lock
 
 
 def clear_generated(output: Path) -> None:
@@ -31,7 +33,15 @@ def clear_generated(output: Path) -> None:
 
 
 def build(output: Path = ROOT / "outputs/release") -> dict:
+    output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
+    # Acquire before deleting results or writing a status marker. A refused
+    # concurrent writer must leave the current generation untouched.
+    with publication_lock(output):
+        return _build_locked(output)
+
+
+def _build_locked(output: Path) -> dict:
     clear_generated(output)
     (output / "artifact_manifest.json").write_text(json.dumps({"status": "building"}), encoding="utf-8")
     (output / "release.json").write_text(json.dumps({"status": "building"}), encoding="utf-8")
@@ -53,7 +63,9 @@ def build(output: Path = ROOT / "outputs/release") -> dict:
         if latest["methods"]["constrained"].get("weights") is None:
             raise ValueError("Required latest constrained hedge failed")
         periods = [simulate_period(records, config, audit, f"{year}-01-01", f"{year}-12-31") for year in (2022, 2023)]
-        pack = {"version": "1.0.0", "schema_version": 1, "status": "complete_research_release",
+        with (ROOT / "pyproject.toml").open("rb") as project_stream:
+            version = tomllib.load(project_stream)["project"]["version"]
+        pack = {"version": version, "schema_version": 1, "status": "complete_research_release",
                 "code_sha256": code_fingerprint(ROOT),
                 "instrument_config_sha256": hashlib.sha256((ROOT / "configs/treasury_instruments.json").read_bytes()).hexdigest(),
                 "generated_at": datetime.now(timezone.utc).isoformat(), "source": source,
@@ -69,7 +81,7 @@ def build(output: Path = ROOT / "outputs/release") -> dict:
                     "Full short market value plus 2% is reserved as collateral; starting capital buffer is 10% of target face. Collateral/funding breaches are reported, not covered by silent external cash.",
                     "Targets are held to maturity without replenishment. Each annual evaluation restarts with equal initial equity across hedge methods.",
                     "No overnight-indexed swaps, futures CTD/convexity adjustment, optionality or derivatives margin model is included in this cash-Treasury release.",
-                    "Ten older source curves remain quarantined. Required evaluation dates and independent auction conventions must pass before publication.",
+                    f"{len(audit['exceptions'])} older source curves remain quarantined. Required evaluation dates and independent auction conventions must pass before publication.",
                 ]}
         encoded = json.dumps(pack, indent=2, allow_nan=False)
         verify_pack(pack)

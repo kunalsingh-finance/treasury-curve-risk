@@ -4,8 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import asdict
 from datetime import date
+from numbers import Real
 from pathlib import Path
 
 from .analysis import benchmark_curves, curve_from_record, shock_scenarios
@@ -18,6 +20,55 @@ from .benchmarks import load_instrument_config as validated_config
 
 METHODS = ("unhedged", "duration", "unweighted", "constrained")
 DEFAULT_FACES = (2_000_000.0, 4_000_000.0, 6_000_000.0)
+_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
+
+
+def _iso_date(value: object, name: str) -> date:
+    if not isinstance(value, str) or not _DATE_PATTERN.fullmatch(value):
+        raise ValueError(f"{name} must be a strict ISO YYYY-MM-DD date")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"{name} must be a valid ISO calendar date") from error
+
+
+def _real(value: object, name: str, *, nonnegative: bool = False) -> float:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise ValueError(f"{name} must be a finite real number")
+    try:
+        result = float(value)
+    except (ValueError, OverflowError) as error:
+        raise ValueError(f"{name} must be a finite real number") from error
+    if not math.isfinite(result) or (nonnegative and result < 0):
+        raise ValueError(f"{name} must be finite" + (" and nonnegative" if nonnegative else ""))
+    return result
+
+
+def _face_amounts(values, count: int) -> tuple[float, ...]:
+    """Freeze a supplied iterable before pricing, sizing or constructing positions."""
+    try:
+        supplied = tuple(values)
+    except TypeError as error:
+        raise ValueError("Positive finite real face amounts are required for each target") from error
+    if len(supplied) != count:
+        raise ValueError("Positive finite real face amounts are required for each target")
+    faces = tuple(_real(value, "face amount") for value in supplied)
+    if any(face <= 0 for face in faces):
+        raise ValueError("Positive finite real face amounts are required for each target")
+    return faces
+
+
+def _validate_record_dates(records: list[dict]) -> None:
+    if not isinstance(records, list) or not records:
+        raise ValueError("Curve records must be a nonempty list")
+    previous = None
+    for row in records:
+        if not isinstance(row, dict):
+            raise ValueError("Each curve record must be an object with an ISO date")
+        observed = _iso_date(row.get("date"), "curve record date")
+        if previous is not None and observed <= previous:
+            raise ValueError("Curve record dates must be unique and strictly increasing")
+        previous = observed
 
 
 def load_instrument_config(path: Path) -> dict:
@@ -59,8 +110,7 @@ def level_history(records: list[dict], audit: dict) -> list[dict]:
 
 
 def risk_inputs(targets: list[DatedBond], hedges: list[DatedBond], faces: list[float], curve, settlement: str) -> dict:
-    if len(faces) != len(targets) or not all(math.isfinite(face) and face > 0 for face in faces):
-        raise ValueError("Positive finite face amounts are required for each target")
+    faces = _face_amounts(faces, len(targets))
     if any(bond.face != 100 for bond in targets + hedges):
         raise ValueError("Dated risk instruments must have face 100; scale positions with units")
     target_vectors = [bond.key_rate_dv01(curve, settlement) for bond in targets]
@@ -110,13 +160,20 @@ def latest_analysis(records: list[dict], config: dict, audit: dict, *, faces=DEF
                     valuation_date: str | None = None, lookback: int = 252,
                     gross_multiple: float = 2.0, position_multiple: float = 1.5,
                     cash_neutral: bool = False) -> dict:
-    valuation_date = valuation_date or records[-1]["date"]
+    _validate_record_dates(records)
+    gross_multiple = _real(gross_multiple, "gross_multiple", nonnegative=True)
+    position_multiple = _real(position_multiple, "position_multiple", nonnegative=True)
+    if not isinstance(cash_neutral, bool):
+        raise ValueError("cash_neutral must be a boolean")
+    valuation_date = records[-1]["date"] if valuation_date is None else valuation_date
+    _iso_date(valuation_date, "valuation_date")
     selected = next((item for item in records if item["date"] == valuation_date), None)
     if selected is None or valuation_date in {row["date"] for row in audit["exceptions"]}:
         raise ValueError("Requested curve date is unavailable or quarantined")
     curve = curve_from_record(selected)
     targets, hedges = instruments(config, "latest", "targets"), instruments(config, "latest", "hedges")
-    inputs = risk_inputs(targets, hedges, list(faces), curve, valuation_date)
+    faces = _face_amounts(faces, len(targets))
+    inputs = risk_inputs(targets, hedges, faces, curve, valuation_date)
     add_tenors(inputs, hedges, valuation_date)
     covariance = estimate_covariance(level_history(records, audit), valuation_date,
                                      lookback_changes=lookback, shrinkage=0.10)
@@ -153,11 +210,19 @@ def simulate_period(records: list[dict], config: dict, audit: dict, start_date: 
                     *, faces=DEFAULT_FACES, lookback=252, gross_multiple=2.0,
                     position_multiple=1.5, cash_rate=0.02, funding_rate=0.05,
                     transaction_cost_bps=1.0, capital_buffer_multiple=0.10) -> dict:
+    _validate_record_dates(records)
+    first_bound, last_bound = _iso_date(start_date, "start_date"), _iso_date(end_date, "end_date")
+    if last_bound < first_bound:
+        raise ValueError("end_date cannot precede start_date")
+    gross_multiple = _real(gross_multiple, "gross_multiple", nonnegative=True)
+    position_multiple = _real(position_multiple, "position_multiple", nonnegative=True)
+    capital_buffer_multiple = _real(capital_buffer_multiple, "capital_buffer_multiple", nonnegative=True)
     rejected = {row["date"] for row in audit["exceptions"]}
     window = [item for item in records if start_date <= item["date"] <= end_date]
     if len(window) < 2 or any(item["date"] in rejected for item in window):
         raise ValueError("Historical period is insufficient or contains quarantined dates")
     targets, all_hedges = instruments(config, "historical", "targets"), instruments(config, "historical", "hedges")
+    faces = _face_amounts(faces, len(targets))
     history = level_history(records, audit)
     policy = FundingPolicy(cash_rate_annual=cash_rate, funding_rate_annual=funding_rate,
                            transaction_cost_bps=transaction_cost_bps, short_margin_rate=0.02,
@@ -165,6 +230,8 @@ def simulate_period(records: list[dict], config: dict, audit: dict, start_date: 
     first_date = window[0]["date"]
     initial_curve = curve_from_record(window[0])
     equity = math.fsum(face / 100 * bond.price(initial_curve, first_date) for face, bond in zip(faces, targets)) + sum(faces) * capital_buffer_multiple
+    if not math.isfinite(equity) or equity <= 0:
+        raise ValueError("Initial equity must be positive and finite for wealth-return metrics")
     ledgers, rows, decisions = {}, [], []
     previous_month = None
     for current in window:
@@ -179,7 +246,7 @@ def simulate_period(records: list[dict], config: dict, audit: dict, start_date: 
                 raise ValueError("Prior decision curve is stale by more than seven calendar days")
             decision_curve = curve_from_record(previous)
             active = [bond for bond in all_hedges if bond.issue_date <= date.fromisoformat(day) and bond.cashflows(day)]
-            inputs = risk_inputs(targets, active, list(faces), decision_curve, day)
+            inputs = risk_inputs(targets, active, faces, decision_curve, day)
             add_tenors(inputs, active, day)
             covariance = estimate_covariance(history, day, lookback_changes=lookback, shrinkage=0.10)
             methods = hedge_methods(inputs, covariance["covariance"], sum(faces) * gross_multiple,

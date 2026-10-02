@@ -9,6 +9,7 @@ from unittest.mock import patch
 import zipfile
 
 from scripts import package_release
+from scripts.publication_lock import publication_lock
 
 
 def digest(payload):
@@ -158,6 +159,38 @@ class ReviewPackageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 package_release.package(self.root)
         self.assert_no_partial_package()
+
+    def test_package_refuses_active_rebuild_without_changing_outputs(self):
+        original = {path.name: path.read_bytes() for path in self.release.iterdir() if path.is_file()}
+        with publication_lock(self.release):
+            with self.assertRaisesRegex(RuntimeError, "Another publisher"):
+                self.build()
+        self.assertEqual({name: (self.release / name).read_bytes() for name in original}, original)
+        self.assert_no_partial_package()
+
+    def test_competing_archive_writer_preserves_last_valid_package(self):
+        output = self.build()
+        original = output.read_bytes()
+        with publication_lock(self.dist):
+            with self.assertRaisesRegex(RuntimeError, "Another publisher"):
+                self.build()
+        self.assertEqual(output.read_bytes(), original)
+        self.assertEqual(list(self.dist.glob("*.tmp")), [])
+        # Failure while acquiring the second lock releases the first lock too.
+        with publication_lock(self.release):
+            pass
+
+    def test_start_here_uses_saved_release_version(self):
+        self.pack["version"] = "9.8.7"
+        self.payloads["release.json"] = (json.dumps(self.pack) + "\n").encode()
+        (self.release / "release.json").write_bytes(self.payloads["release.json"])
+        self.write_artifact_manifest()
+        self.workbook_checks["releaseSha256"] = digest(self.payloads["release.json"])
+        self.write_workbook_checks()
+        output = self.build()
+        self.assertEqual(output.name, "treasury_curve_risk_v9.8.7_review.zip")
+        with zipfile.ZipFile(output) as bundle:
+            self.assertIn(b"Treasury Curve & Hedge Engine v9.8.7", bundle.read("START_HERE.txt"))
 
 
 if __name__ == "__main__":

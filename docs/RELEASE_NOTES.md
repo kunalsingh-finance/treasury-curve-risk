@@ -1,6 +1,17 @@
-# Treasury Curve & Hedge Engine v1.0.0
+# Treasury Curve & Hedge Engine v1.0.1
 
 A dated cash-Treasury research platform with sourced security terms, constrained hedge decisions and auditable cash accounting.
+
+## Changes in v1.0.1
+
+- Reject invalid face amounts, controls and dates before research calculations. Iterable holdings are materialized once; duplicate or unordered observations and nonpositive starting equity reject.
+- Verify portfolio values, comparison hedges, scenarios and covariance evidence against numerical identities and the checked source. Report HTML and ledger CSVs must agree with the saved pack.
+- Lock publication so overlapping builds cannot erase another writer's successful release. Review packages use their own staging files and a protected source snapshot.
+- Derive release version and source-exception count from their recorded inputs. Renew the report, workbook and review archive together.
+
+The pinned source, economic conventions and valid default financial results remain unchanged. The original v1.0.0 GitHub release remains available.
+
+## Research scope
 
 - Price 16 officially sourced Treasury terms with dated coupon schedules, accrued interest and clean/dirty fitted-curve values.
 - Compare parallel-DV01, unweighted and covariance-risk hedges with gross-face and position limits, and independently checked convex optimality gaps.

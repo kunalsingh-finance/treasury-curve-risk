@@ -173,6 +173,103 @@ class DatedResearchTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "hash mismatch"):
                     load_instrument_config(path)
 
+    def test_face_iterators_preserve_the_same_holdings_constraints_and_history(self):
+        parameters = {"valuation_date": "2022-01-31", "lookback": 30}
+        baseline = latest_analysis(self.records, self.config, self.audit, faces=FACES, **parameters)
+        generated = latest_analysis(self.records, self.config, self.audit,
+                                    faces=(face for face in FACES), **parameters)
+        self.assertEqual(generated, baseline)
+        self.assertEqual(generated["faces"], list(FACES))
+        self.assertEqual(len(generated["portfolio"]), 3)
+        baseline_period = self.simulate()
+        generated_period = simulate_period(self.records, self.config, self.audit,
+            "2022-01-03", "2022-02-04", faces=(face for face in FACES), lookback=30)
+        self.assertEqual(generated_period, baseline_period)
+
+    def test_positive_face_inputs_reject_booleans_nonreal_and_nonfinite_values(self):
+        invalid_faces = [(True, 1200, 1400), (np.bool_(True), 1200, 1400),
+            (0, 1200, 1400), (-1, 1200, 1400), (float("nan"), 1200, 1400),
+            (float("inf"), 1200, 1400), ("1000", 1200, 1400), (1 + 0j, 1200, 1400),
+            (None, 1200, 1400), (1000, 1200), (), None]
+        for faces in invalid_faces:
+            with self.subTest(faces=faces, operation="latest"), self.assertRaises(ValueError):
+                latest_analysis(self.records, self.config, self.audit, faces=faces,
+                                 valuation_date="2022-01-31", lookback=30)
+            with self.subTest(faces=faces, operation="history"), self.assertRaises(ValueError):
+                simulate_period(self.records, self.config, self.audit, "2022-01-03", "2022-02-04",
+                                faces=faces, lookback=30)
+
+    def test_hedge_multiples_reject_bool_nonreal_nonfinite_and_negative_values(self):
+        for name in ("gross_multiple", "position_multiple"):
+            for value in (True, False, np.bool_(True), -1, float("nan"), float("inf"), "2", None, 2 + 0j):
+                parameters = {name: value}
+                with self.subTest(name=name, value=value, operation="latest"), self.assertRaises(ValueError):
+                    latest_analysis(self.records, self.config, self.audit, faces=FACES,
+                                     valuation_date="2022-01-31", lookback=30, **parameters)
+                with self.subTest(name=name, value=value, operation="history"), self.assertRaises(ValueError):
+                    self.simulate(**parameters)
+        # Real zero limits still express infeasibility rather than invalid input.
+        result = latest_analysis(self.records, self.config, self.audit, faces=FACES,
+                                 valuation_date="2022-01-31", lookback=30, position_multiple=0)
+        self.assertEqual(result["methods"]["constrained"]["status"], "infeasible")
+
+    def test_cash_neutral_requires_an_actual_boolean(self):
+        for value in (0, 1, "False", None, np.bool_(True)):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "cash_neutral"):
+                latest_analysis(self.records, self.config, self.audit, faces=FACES,
+                                 valuation_date="2022-01-31", lookback=30, cash_neutral=value)
+
+    def test_capital_buffer_is_nonnegative_and_zero_preserves_positive_equity(self):
+        # The old negative-buffer path could return negative-equity drawdown zero,
+        # or divide by zero when the buffer exactly cancelled initial target PV.
+        baseline = self.simulate()
+        initial_target_pv = baseline["initial_equity"] - sum(FACES) * .10
+        zero_equity_buffer = -initial_target_pv / sum(FACES)
+        for value in (-2, zero_equity_buffer, True, float("nan"), float("inf"), "0.1", None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "capital_buffer_multiple"):
+                self.simulate(capital_buffer_multiple=value)
+        result = self.simulate(capital_buffer_multiple=0)
+        self.assertAlmostEqual(result["initial_equity"], initial_target_pv)
+        self.assertGreater(result["initial_equity"], 0)
+        for summary in result["summaries"].values():
+            self.assertTrue(math.isfinite(summary["wealth_change_fraction"]))
+            self.assertLessEqual(summary["maximum_drawdown"], 0)
+
+    def test_zero_initial_equity_cannot_reach_wealth_return_calculations(self):
+        for target in self.config["historical"]["targets"]:
+            target["maturity_date"] = "2021-01-15"
+        with self.assertRaisesRegex(ValueError, "Initial equity"):
+            self.simulate(capital_buffer_multiple=0)
+
+    def test_requested_dates_are_strict_valid_iso_dates_and_ranges_are_chronological(self):
+        for value in ("2022-01-00", "2022-02-30", "20220131", "2022-1-31", "", True, date(2022, 1, 31)):
+            with self.subTest(value=value, operation="latest"), self.assertRaisesRegex(ValueError, "valuation_date"):
+                latest_analysis(self.records, self.config, self.audit, faces=FACES,
+                                 valuation_date=value, lookback=30)
+            for bound in ("start", "end"):
+                first, last = (value, "2022-02-04") if bound == "start" else ("2022-01-03", value)
+                with self.subTest(value=value, bound=bound), self.assertRaises(ValueError):
+                    simulate_period(self.records, self.config, self.audit, first, last, faces=FACES, lookback=30)
+        with self.assertRaisesRegex(ValueError, "precede"):
+            simulate_period(self.records, self.config, self.audit, "2022-02-04", "2022-01-03",
+                            faces=FACES, lookback=30)
+
+    def test_curve_records_require_unique_valid_chronological_dates(self):
+        duplicate = deepcopy(self.records)
+        first_trade = next(index for index, row in enumerate(duplicate) if row["date"] == "2022-01-03")
+        duplicate.insert(first_trade, deepcopy(duplicate[first_trade]))
+        unordered = deepcopy(self.records)
+        unordered[-1], unordered[-2] = unordered[-2], unordered[-1]
+        malformed_date = deepcopy(self.records)
+        malformed_date[-1]["date"] = "2022-02-30"
+        for records in ([], duplicate, unordered, malformed_date, [None], [{"beta0": 2}], tuple(self.records)):
+            with self.subTest(records=records, operation="latest"), self.assertRaises(ValueError):
+                latest_analysis(records, self.config, self.audit, faces=FACES,
+                                 valuation_date="2022-01-31", lookback=30)
+            with self.subTest(records=records, operation="history"), self.assertRaises(ValueError):
+                simulate_period(records, self.config, self.audit, "2022-01-03", "2022-01-31",
+                                faces=FACES, lookback=30)
+
 
 if __name__ == "__main__":
     unittest.main()

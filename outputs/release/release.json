@@ -1,10 +1,10 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "schema_version": 1,
   "status": "complete_research_release",
-  "code_sha256": "b56c1a4a42f3cc7e1fc4b8e25cefa14d9d448dca81dedd01827b2b8a420e7ca4",
+  "code_sha256": "26892a0ec793189bc7b53e1e2a1838c40d75c3cf2ff005a3778251ec71489960",
   "instrument_config_sha256": "c08c737a24047e301ef641c0e1ba490724829dc9b46b59accb5b834309bdece5",
-  "generated_at": "2026-10-02T13:35:28.280926+00:00",
+  "generated_at": "2026-10-02T14:06:11.181218+00:00",
   "source": {
     "source_url": "https://www.federalreserve.gov/data/yield-curve-tables/feds200628.csv",
     "source_page": "https://www.federalreserve.gov/data/nominal-yield-curve.htm",
@@ -135330,6 +135330,6 @@
     "Full short market value plus 2% is reserved as collateral; starting capital buffer is 10% of target face. Collateral/funding breaches are reported, not covered by silent external cash.",
     "Targets are held to maturity without replenishment. Each annual evaluation restarts with equal initial equity across hedge methods.",
     "No overnight-indexed swaps, futures CTD/convexity adjustment, optionality or derivatives margin model is included in this cash-Treasury release.",
-    "Ten older source curves remain quarantined. Required evaluation dates and independent auction conventions must pass before publication."
+    "10 older source curves remain quarantined. Required evaluation dates and independent auction conventions must pass before publication."
   ]
 }

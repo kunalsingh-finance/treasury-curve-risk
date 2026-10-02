@@ -1,6 +1,7 @@
 """Offline release-integrity regressions; fixtures contain no real price claims."""
 
 from copy import deepcopy
+from contextlib import contextmanager
 import csv
 from datetime import date, timedelta
 import hashlib
@@ -15,9 +16,11 @@ from unittest.mock import patch
 import numpy as np
 
 from scripts import build_release, verify_release
-from treasury_risk.analysis import curve_from_record
+from treasury_risk.analysis import benchmark_curves, curve_from_record
+from treasury_risk.benchmarks import official_auction_benchmarks
 from treasury_risk.dated_bonds import is_business_day
 from treasury_risk.research import instruments, latest_analysis, risk_inputs, simulate_period
+from treasury_risk.release_report import render_release
 
 
 def synthetic_term(cusip, maturity, coupon=.04):
@@ -30,7 +33,7 @@ def synthetic_term(cusip, maturity, coupon=.04):
             "source_snapshot_sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
-def synthetic_complete_pack(*, capital_buffer_multiple=.10):
+def synthetic_complete_pack(*, capital_buffer_multiple=.10, include_sources=False):
     targets = [synthetic_term("TARGET001", "2025-01-15", .035),
                synthetic_term("TARGET002", "2027-01-15", .0425),
                synthetic_term("TARGET003", "2030-01-15", .0475)]
@@ -47,7 +50,14 @@ def synthetic_complete_pack(*, capital_buffer_multiple=.10):
                             "beta1": -.6 + .02 * math.cos(index * .23), "beta2": .4 + .06 * math.sin(index * .17),
                             "beta3": .2 + .03 * math.cos(index * .11), "tau1": 1.2, "tau2": 4.0})
         day += timedelta(days=1)
-    audit = {"exceptions": []}
+    for row in records:
+        curve = curve_from_record(row)
+        row["published_zero_yields"] = {node: curve.zero_yield(node) for node in range(1, 31)}
+        row["data_vintage"] = "current_vintage"
+    # A genuine synthetic source exception lies outside every required window.
+    records[0]["published_zero_yields"][1] += .001
+    audit = benchmark_curves(records, strict=False)
+    quality = {"valid_rows": len(records), "start_date": records[0]["date"], "end_date": records[-1]["date"]}
     faces = (1000, 1200, 1400)
     latest = latest_analysis(records, config, audit, faces=faces, valuation_date="2023-01-04", lookback=30)
     periods = [simulate_period(records, config, audit, f"{year}-01-03", f"{year}-01-04",
@@ -66,24 +76,22 @@ def synthetic_complete_pack(*, capital_buffer_multiple=.10):
                 active = [bond for bond in hedge_bonds if bond.cusip in decision["active_hedges"]]
                 decision["risk_inputs"] = risk_inputs(target_bonds, active, list(faces),
                     curve_from_record(by_date[decision["decision_curve_date"]]), decision["trade_date"])
-    benchmarks = [{"cusip": item["cusip"], "settlement_date": item["issue_date"],
-                   "official_clean_price_per_100": 100.0, "calculated_clean_price_per_100": 100.0,
-                   "calculated_accrued_interest_per_100": 0.0, "error_per_100": 0.0,
-                   "tolerance_per_100": .000001, "passed": True,
-                   "source_url": item["source_url"], "convention": "OFFLINE SYNTHETIC exact equality fixture"}
-                  for era in ("latest", "historical") for group in ("targets", "hedges") for item in config[era][group]]
+    benchmarks = official_auction_benchmarks([item for era in ("latest", "historical")
+        for group in ("targets", "hedges") for item in config[era][group]])
     config_bytes = json.dumps(config).encode()
-    return {"version": "1.0.0", "schema_version": 1, "status": "complete_research_release",
+    pack = {"version": "1.0.0", "schema_version": 1, "status": "complete_research_release",
             "code_sha256": "synthetic-model-hash", "source": {"sha256": "synthetic-curve-hash"},
             "instrument_config_sha256": hashlib.sha256(config_bytes).hexdigest(),
             "instrument_config": config, "latest": latest, "periods": periods,
-            "auction_benchmarks": benchmarks}, config_bytes
+            "auction_benchmarks": benchmarks, "source_audit": audit,
+            "data_quality": quality, "limitations": ["Offline synthetic source and position fixture."]}
+    return (pack, config_bytes, records, quality) if include_sources else (pack, config_bytes)
 
 
 class ReleaseValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.complete, cls.config_bytes = synthetic_complete_pack()
+        cls.complete, cls.config_bytes, cls.records, cls.quality = synthetic_complete_pack(include_sources=True)
 
     def setUp(self):
         self.pack = deepcopy(self.complete)
@@ -221,11 +229,13 @@ class ReleaseValidationTests(unittest.TestCase):
 
     def make_release_directory(self, root):
         (root / "configs").mkdir()
+        (root / "pyproject.toml").write_text('[project]\nversion = "1.0.0"\n', encoding="utf-8")
         (root / "configs/treasury_instruments.json").write_bytes(self.config_bytes)
         output = root / "release"
         output.mkdir()
         (output / "release.json").write_text(json.dumps(self.pack), encoding="utf-8")
-        (output / "report.html").write_text("<!doctype html><p>Offline synthetic artifact fixture</p>")
+        (output / "report.html").write_text(render_release(self.pack,
+            ["risk_and_factors.png", "wealth_2022.png", "wealth_2023.png"]), encoding="utf-8")
         for name in ("risk_and_factors.png", "wealth_2022.png", "wealth_2023.png"):
             (output / name).write_bytes(b"offline synthetic chart artifact; no real chart claim")
         for period in self.pack["periods"]:
@@ -233,12 +243,27 @@ class ReleaseValidationTests(unittest.TestCase):
             writer = csv.DictWriter(stream, fieldnames=list(period["rows"][0]))
             writer.writeheader()
             writer.writerows(period["rows"])
-            (output / f"ledger_{period['start_date'][:4]}.csv").write_text(stream.getvalue(), encoding="utf-8")
+            (output / f"ledger_{period['start_date'][:4]}.csv").write_text(stream.getvalue(), encoding="utf-8", newline="")
         manifest = {"version": "1.0.0", "status": "complete_research_release", "files": {
             path.name: {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
             for path in output.iterdir()}}
         (output / "artifact_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return output
+
+    @contextmanager
+    def verified_sources(self, root):
+        with patch.object(verify_release, "ROOT", root), \
+             patch.object(verify_release, "code_fingerprint", return_value="synthetic-model-hash"), \
+             patch.object(verify_release, "validate_source_manifest", return_value={"sha256": "synthetic-curve-hash"}), \
+             patch.object(verify_release, "load_gsw", return_value=(self.records, self.quality)):
+            yield
+
+    def rehash_artifact(self, output, name):
+        path = output / name
+        manifest_path = output / "artifact_manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["files"][name] = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
+        manifest_path.write_text(json.dumps(manifest))
 
     def test_manifest_requires_all_published_artifacts(self):
         for omission in ("all", "ledger_2023.csv", "release.json"):
@@ -262,9 +287,7 @@ class ReleaseValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="treasury_release_audit_") as directory:
             root = Path(directory)
             output = self.make_release_directory(root)
-            with patch.object(verify_release, "ROOT", root), \
-                 patch.object(verify_release, "code_fingerprint", return_value="synthetic-model-hash"), \
-                 patch.object(verify_release, "validate_source_manifest", return_value={"sha256": "synthetic-curve-hash"}):
+            with self.verified_sources(root):
                 result = verify_release.verify(output)
             self.assertEqual(result["status"], "passed")
             self.assertEqual(result["artifacts_verified"], 7)
@@ -278,6 +301,124 @@ class ReleaseValidationTests(unittest.TestCase):
                  patch.object(verify_release, "code_fingerprint", return_value="synthetic-model-hash"), \
                  patch.object(verify_release, "validate_source_manifest", return_value={"sha256": "synthetic-curve-hash"}):
                 with self.assertRaises(ValueError):
+                    verify_release.verify(output)
+
+    def test_pca_factors_and_comparator_weights_are_reconstructed(self):
+        for mutation in ("pca_vector", "pca_ratio", "duration", "unweighted", "unhedged"):
+            with self.subTest(mutation=mutation):
+                altered = deepcopy(self.pack)
+                if mutation == "pca_vector":
+                    altered["latest"]["covariance"]["pca"]["eigenvectors"][0][0] += .1
+                elif mutation == "pca_ratio":
+                    altered["latest"]["covariance"]["pca"]["explained_variance_ratio"][0] += .1
+                else:
+                    altered["latest"]["methods"][mutation]["weights"][0] += 1
+                with self.assertRaises(ValueError):
+                    verify_release.verify_pack(altered)
+
+    def test_latest_portfolio_pv_must_match_its_holdings(self):
+        self.pack["latest"]["risk_inputs"]["target_price"] += 100
+        with self.assertRaises(ValueError):
+            verify_release.verify_pack(self.pack)
+
+    def test_rehashed_pack_values_cannot_override_verified_source_repricing(self):
+        for mutation in ("scenario", "coherent_latest_pv", "removed_source_exception", "scaled_covariance"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(prefix="treasury_semantic_forgery_") as directory:
+                self.pack = deepcopy(self.complete)
+                if mutation == "scenario":
+                    self.pack["latest"]["scenarios"][0]["constrained"] += 1000
+                elif mutation == "coherent_latest_pv":
+                    self.pack["latest"]["risk_inputs"]["target_price"] += 100
+                    self.pack["latest"]["portfolio"][0]["dirty_price"] += 100
+                    self.pack["latest"]["portfolio"][0]["clean_price"] += 100
+                elif mutation == "removed_source_exception":
+                    audit = self.pack["source_audit"]
+                    self.assertEqual(len(audit["exceptions"]), 1)
+                    audit["exceptions"] = []
+                    audit["quarantined_observations"] = 0
+                    audit["admissible_observations"] += 1
+                    audit["audit_status"] = "pass"
+                else:
+                    covariance = self.pack["latest"]["covariance"]
+                    for key in ("covariance", "sample_covariance"):
+                        covariance[key] = (np.array(covariance[key]) * 2).tolist()
+                    covariance["pca"]["eigenvalues"] = (np.array(covariance["pca"]["eigenvalues"]) * 2).tolist()
+                    for key in ("variance_before", "variance_after", "objective_value"):
+                        self.pack["latest"]["methods"]["constrained"][key] *= 2
+                # Each forgery is internally consistent enough for algebraic
+                # controls; only independently loading observed source rejects it.
+                self.assertEqual(verify_release.verify_pack(self.pack)["status"], "passed")
+                root = Path(directory)
+                output = self.make_release_directory(root)
+                with self.verified_sources(root), self.assertRaises(ValueError):
+                    verify_release.verify(output)
+
+    def test_coherent_fabricated_coupon_income_is_rejected_by_source_replay(self):
+        period = self.pack["periods"][0]
+        selected = [row for row in period["rows"] if row["method"] == "unhedged"]
+        row = selected[-1]
+        for key in ("cash", "wealth", "free_cash", "coupon_cash", "cumulative_coupon_cash"):
+            row[key] += 10
+        summary = period["summaries"]["unhedged"]
+        summary["final_wealth"] += 10
+        summary["net_pnl"] += 10
+        summary["wealth_change_fraction"] = row["wealth"] / period["initial_equity"] - 1
+        summary["accounting_totals"]["cumulative_coupon_cash"] += 10
+        peak, worst = period["initial_equity"], 0.0
+        for observation in selected:
+            peak = max(peak, observation["wealth"])
+            worst = min(worst, observation["wealth"] / peak - 1)
+        summary["maximum_drawdown"] = worst
+        self.assertEqual(verify_release.verify_pack(self.pack)["status"], "passed")
+        with self.assertRaisesRegex(ValueError, "source historical cash-flow replay"):
+            verify_release.source_bound_checks(self.pack, self.records, self.quality)
+
+    def test_rehashed_html_and_csv_must_render_verified_financial_values(self):
+        for mutation in ("html", "csv_count", "csv_value", "csv_header"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(prefix="treasury_artifact_forgery_") as directory:
+                root = Path(directory)
+                output = self.make_release_directory(root)
+                name = "report.html" if mutation == "html" else "ledger_2022.csv"
+                path = output / name
+                if mutation == "html":
+                    path.write_text("<!doctype html><h1>All investments guarantee positive returns</h1>", encoding="utf-8")
+                else:
+                    rows = list(csv.reader(io.StringIO(path.read_text())))
+                    if mutation == "csv_count":
+                        rows = rows[:2]
+                    elif mutation == "csv_value":
+                        rows[1][rows[0].index("wealth")] = "999999999"
+                    else:
+                        rows[0][0] = "false_method"
+                    stream = io.StringIO(newline="")
+                    csv.writer(stream).writerows(rows)
+                    path.write_text(stream.getvalue(), encoding="utf-8", newline="")
+                self.rehash_artifact(output, name)
+                with self.verified_sources(root), self.assertRaises(ValueError):
+                    verify_release.verify(output)
+
+    def test_source_metadata_must_match_the_verified_capture(self):
+        self.pack["source"]["captured_at"] = "1999-01-01T00:00:00+00:00"
+        self.pack["source"]["source_url"] = "https://example.invalid/false-source"
+        with tempfile.TemporaryDirectory(prefix="treasury_capture_metadata_") as directory:
+            root = Path(directory)
+            output = self.make_release_directory(root)
+            with self.verified_sources(root), self.assertRaisesRegex(ValueError, "source metadata"):
+                verify_release.verify(output)
+
+    def test_release_version_must_match_manifest_and_project(self):
+        for mutation in ("manifest", "project"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(prefix="treasury_release_version_") as directory:
+                root = Path(directory)
+                output = self.make_release_directory(root)
+                if mutation == "manifest":
+                    path = output / "artifact_manifest.json"
+                    manifest = json.loads(path.read_text())
+                    manifest["version"] = "0.9.9"
+                    path.write_text(json.dumps(manifest))
+                else:
+                    (root / "pyproject.toml").write_text('[project]\nversion = "2.0.0"\n')
+                with self.verified_sources(root), self.assertRaisesRegex(ValueError, "version"):
                     verify_release.verify(output)
 
     def test_failed_rebuild_removes_generated_ledgers_and_charts(self):

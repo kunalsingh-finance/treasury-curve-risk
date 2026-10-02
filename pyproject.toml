@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "treasury-curve-risk"
-version = "1.0.0"
+version = "1.0.1"
 description = "Dated Treasury pricing, constrained hedging and audited research accounting"
 readme = "README.md"
 requires-python = ">=3.11"

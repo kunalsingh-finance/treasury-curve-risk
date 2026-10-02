@@ -160,7 +160,7 @@ block(risk, 32, 3, [['Target variance (USD squared)'], ['Residual variance (USD 
 formula(risk, 'D32', '=SUM(O8:O16)'); formula(risk, 'D33', '=SUM(L8:L16)'); formula(risk, 'D34', '=IF(D32=0,"n.a.",1-D33/D32)'); formula(risk, 'D35', "='Inputs'!D18", true);
 formula(risk, 'D36', '=IF(D35<0,"n.a.",SQRT(MAX(0,D32*D35)))'); formula(risk, 'D37', '=IF(D35<0,"n.a.",SQRT(MAX(0,D33*D35)))');
 note(risk, 'C39', 'Variance uses the frozen shrunk covariance and linear key-rate exposure. The multiplier scales covariance, not positions.');
-note(risk, 'C40', 'The observation step can include weekends and holidays. This is a model forecast, not a daily return estimate.');
+note(risk, 'C40', 'The observation step can include weekends and holidays. Standard deviation describes the estimated risk of that step.');
 risk.getRange('C1:C49').format.columnWidth = 35; risk.getRange('D1:J49').format.columnWidth = 17;
 risk.getRange('K1:L49').format.columnWidth = 23; risk.getRange('M1:M49').format.columnWidth = 3; risk.getRange('N1:O49').format.columnWidth = 25;
 risk.getRange('K7:O7').format.wrapText = true; risk.getRange('C7:O7').format.rowHeight = 33; risk.getRange('M7').format.fill = '#FFFFFF';

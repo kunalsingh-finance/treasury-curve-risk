@@ -2,7 +2,7 @@
 
 A completed dated fixed-income research engine: source Treasury terms, value their cash flows, size constrained hedges, and reconcile the resulting cash and portfolio wealth.
 
-Start with the [v1 release report](outputs/release/report.html) and [hedge decision memo](docs/DECISION_MEMO.md). The local interface in [app.py](app.py) lets a reviewer change face allocations, valuation date, covariance lookback and hedge limits, then inspect prices, residual risk, scenarios and source exceptions.
+Start with the [v1.0.1 release report](outputs/release/report.html) and [hedge decision memo](docs/DECISION_MEMO.md). The local interface in [app.py](app.py) lets a reviewer change face allocations, valuation date, covariance lookback and hedge limits, then inspect prices, residual risk, scenarios and source exceptions.
 
 ## What the release demonstrates
 
@@ -42,7 +42,7 @@ python scripts/check_installation.py
 
 The dashboard integration smoke check requires the restored raw source. The installation check exports the committed repository, restores the source with networking disabled, verifies report artifacts and installs a wheel in an isolated target. It requires the runtime requirements plus setuptools and wheel. The wheel exposes the numerical Python library; the app, scripts and data are run from a source checkout.
 
-The release builder replaces prior report status with `building` and publishes a failure page if a required check fails. The verifier checks saved artifact bytes, current source/config/model fingerprints, cash rolls, dated decision boundaries and hedge constraints. A successfully generated report does not convert source exceptions into passed observations.
+The release builder holds an exclusive publication lock before replacing report status with `building` and publishes a failure page if a required check fails. An overlapping build stops without changing the active build's files. The verifier checks saved artifact bytes, current source/config/model fingerprints, cash rolls, dated decision boundaries and hedge constraints. It also checks report and CSV content against the saved pack and reconstructs financial inputs from the verified curve source. A successfully generated report does not convert source exceptions into passed observations.
 
 ## Evidence from the pinned release
 

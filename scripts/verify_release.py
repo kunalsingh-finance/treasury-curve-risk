@@ -2,20 +2,31 @@
 from __future__ import annotations
 import argparse
 from collections import Counter
+import csv
 from datetime import date
 import hashlib
+import io
 import json
 import math
 from numbers import Real
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import numpy as np
 from scipy.optimize import linprog
-from treasury_risk.research import code_fingerprint, METHODS
-from treasury_risk.data import validate_source_manifest
+from treasury_risk.research import (add_tenors, code_fingerprint, instruments,
+                                   level_history, METHODS, risk_inputs)
+from treasury_risk.data import load_gsw, validate_source_manifest
+from treasury_risk.analysis import benchmark_curves, curve_from_record, shock_scenarios
+from treasury_risk.accounting import CashLedger, FundingPolicy, Position
+from treasury_risk.benchmarks import official_auction_benchmarks
+from treasury_risk.curve import KEY_RATE_NODES
+from treasury_risk.hedge import select_hedge
+from treasury_risk.optimization import estimate_covariance
+from treasury_risk.release_report import render_release
 
 ARTIFACT_NAMES = frozenset(("release.json", "report.html", "risk_and_factors.png",
                             "wealth_2022.png", "wealth_2023.png", "ledger_2022.csv", "ledger_2023.csv"))
@@ -45,6 +56,27 @@ def equal(value, expected, name, *, absolute=1e-7, relative=1e-10):
         raise ValueError(f"{name} cannot be reconstructed")
 
 
+def equivalent(saved, expected, name, *, absolute=2e-6, relative=2e-10):
+    """Compare a computed structure with bounded roundoff, never missing fields."""
+    if isinstance(expected, dict):
+        if not isinstance(saved, dict) or set(saved) != set(expected):
+            raise ValueError(f"{name} has different fields from its reconstruction")
+        for key in expected:
+            equivalent(saved[key], expected[key], f"{name}.{key}", absolute=absolute, relative=relative)
+    elif isinstance(expected, (list, tuple)):
+        if not isinstance(saved, (list, tuple)) or len(saved) != len(expected):
+            raise ValueError(f"{name} has different length from its reconstruction")
+        for index, (value, reference) in enumerate(zip(saved, expected)):
+            equivalent(value, reference, f"{name}[{index}]", absolute=absolute, relative=relative)
+    elif isinstance(expected, bool) or expected is None or isinstance(expected, str):
+        if type(saved) is not type(expected) or saved != expected:
+            raise ValueError(f"{name} differs from its reconstruction")
+    elif isinstance(expected, Real):
+        equal(saved, expected, name, absolute=absolute, relative=relative)
+    elif saved != expected:
+        raise ValueError(f"{name} differs from its reconstruction")
+
+
 def covariance_checked(saved, execution):
     dates = saved["training_dates"]
     if (not dates or dates != sorted(set(dates)) or dates[-1] >= execution
@@ -62,8 +94,83 @@ def covariance_checked(saved, execution):
     eigenvalues, eigenvectors = np.linalg.eigh((matrix + matrix.T) / 2)
     if eigenvalues[0] < -scale * 1e-10:
         raise ValueError("Covariance is not positive semidefinite")
+    sample = array(saved["sample_covariance"], (9, 9), "sample covariance")
+    sample_scale = max(float(np.max(np.abs(sample))), np.finfo(float).tiny)
+    if not np.allclose(sample, sample.T, rtol=0, atol=sample_scale * 1e-12):
+        raise ValueError("Sample covariance is not symmetric")
+    shrink = scalar(saved["shrinkage"], "shrinkage")
+    if not 0 <= shrink <= 1:
+        raise ValueError("Covariance shrinkage must be between zero and one")
+    expected_covariance = (1 - shrink) * sample + shrink * np.trace(sample) / 9 * np.eye(9)
+    if not np.allclose(matrix, expected_covariance, rtol=1e-9, atol=max(1e-12, scale * 1e-10)):
+        raise ValueError("Shrunk covariance differs from its sample covariance")
+    if saved["key_rate_nodes"] != list(KEY_RATE_NODES):
+        raise ValueError("Covariance node ordering differs from the model")
+    pca = saved["pca"]
+    values = array(pca["eigenvalues"], (9,), "PCA eigenvalues")
+    vectors = array(pca["eigenvectors"], (9, 9), "PCA eigenvectors")
+    ratios = array(pca["explained_variance_ratio"], (9,), "PCA explained variance")
+    tolerance = max(1e-12, sample_scale * 1e-9)
+    if (np.any(values < 0) or np.any(np.diff(values) > tolerance)
+            or not np.allclose(vectors @ vectors.T, np.eye(9), rtol=0, atol=1e-8)
+            or not np.allclose(sample @ vectors.T, vectors.T * values, rtol=1e-8, atol=tolerance)):
+        raise ValueError("PCA eigenpairs do not reconstruct sample covariance")
+    expected_ratios = values / values.sum() if values.sum() else np.zeros(9)
+    if not np.allclose(ratios, expected_ratios, rtol=1e-9, atol=1e-10):
+        raise ValueError("PCA explained variance cannot be reconstructed")
     factor = np.sqrt(np.maximum(eigenvalues, 0))[:, None] * eigenvectors.T
     return factor.T @ factor, factor
+
+
+def comparators_checked(inputs, methods):
+    """Bind displayed benchmark hedges to their stated deterministic rules."""
+    if set(methods) != set(METHODS):
+        raise ValueError("Hedge methods are incomplete")
+    count = len(inputs["hedge_prices"])
+    target = array(inputs["target_exposure"], (9,), "target exposure")
+    matrix = array(inputs["hedge_matrix"], (9, count), "hedge matrix")
+    tenors = array(inputs["hedge_tenors"], (count,), "hedge tenors")
+    parallel = array(inputs["hedge_parallel_dv01"], (count,), "hedge parallel DV01")
+    expected = np.zeros(count)
+    index = int(np.argmin(np.abs(tenors - 10)))
+    if parallel[index] <= 0:
+        raise ValueError("Duration comparator has no outstanding rate exposure")
+    expected[index] = -scalar(inputs["target_parallel_dv01"], "target parallel DV01") / parallel[index]
+    equivalent(methods["unhedged"], {"weights": [0.0] * count}, "unhedged comparator", absolute=1e-12)
+    equivalent(methods["duration"], {"weights": expected.tolist()}, "duration comparator")
+    recomputed = select_hedge(target, matrix)
+    equivalent(methods["unweighted"], recomputed, "unweighted comparator")
+
+
+def latest_checked(latest, config):
+    targets, hedges = config["latest"]["targets"], config["latest"]["hedges"]
+    faces = array(latest["faces"], (len(targets),), "target faces")
+    if np.any(faces <= 0) or len(latest["portfolio"]) != len(targets) or len(latest["hedges"]) != len(hedges):
+        raise ValueError("Latest portfolio coverage is incomplete")
+    inputs = latest["risk_inputs"]
+    target_matrix = array(inputs["target_matrix"], (9, len(targets)), "target risk matrix")
+    target_parallel = array(inputs["target_parallel_dv01_per_100"], (len(targets),), "target parallel columns")
+    equivalent(inputs["target_exposure"], (target_matrix @ (faces / 100)).tolist(), "scaled target exposure")
+    equal(inputs["target_parallel_dv01"], target_parallel @ (faces / 100), "scaled target parallel DV01")
+    for item, term, face in zip(latest["portfolio"], targets, faces):
+        for key in ("cusip", "label", "maturity_date", "coupon_rate", "source_url"):
+            equivalent(item[key], term[key], f"target metadata {key}")
+        equal(item["face"], face, "target allocation")
+        equal(item["dirty_price"], item["clean_price"] + item["accrued_interest"], "latest clean plus accrued PV")
+    equal(inputs["target_price"], math.fsum(item["dirty_price"] for item in latest["portfolio"]), "latest portfolio PV")
+    for item, term, price in zip(latest["hedges"], hedges, inputs["hedge_prices"]):
+        for key in ("cusip", "label", "maturity_date", "coupon_rate"):
+            equivalent(item[key], term[key], f"hedge metadata {key}")
+        equal(item["dirty_price_per_100"], price, "hedge price column")
+    comparators_checked(inputs, latest["methods"])
+    scenarios = latest["scenarios"]
+    if [row["name"] for row in scenarios] != ["Parallel +100bp", "Parallel -100bp", "Long-end steepening", "Front-end selloff"]:
+        raise ValueError("Scenario coverage or ordering is incomplete")
+    for row in scenarios:
+        if set(row) != {"name", *METHODS}:
+            raise ValueError("Scenario method coverage is incomplete")
+        for method in METHODS:
+            scalar(row[method], "scenario P&L")
 
 
 def solution_checked(inputs, saved_covariance, result, declared, execution):
@@ -185,6 +292,7 @@ def _verify_pack(pack):
     checked_rows = decisions = 0
     gaps = []
     latest = pack["latest"]
+    latest_checked(latest, pack["instrument_config"])
     gaps.append(solution_checked(latest["risk_inputs"], latest["covariance"], latest["methods"]["constrained"], latest["constraints"], latest["date"]))
     for period in periods:
         rows = period["rows"]
@@ -267,11 +375,123 @@ def _verify_pack(pack):
                 raise ValueError("Decision curve is same-day, future or stale")
             if len(decision["active_hedges"]) != len(decision["risk_inputs"]["hedge_prices"]):
                 raise ValueError("Decision instrument count differs from risk inputs")
+            comparators_checked(decision["risk_inputs"], decision["methods"])
             gaps.append(solution_checked(decision["risk_inputs"], decision["covariance"], decision["methods"]["constrained"], period["strategy_constraints"], day))
             decisions += 1
     return {"status": "passed", "ledger_rows_reconciled": checked_rows,
             "prior_date_decisions_verified": decisions, "auction_price_checks": len(checks),
             "maximum_recomputed_convex_gap": max(gaps)}
+
+
+def covariance_bound(saved, history, execution):
+    """Rebuild observed covariance levels; PCA may rotate a degenerate eigenspace."""
+    expected = estimate_covariance(history, execution, lookback_changes=saved["change_count"],
+                                   shrinkage=saved["shrinkage"], max_gap_days=saved["max_gap_days"])
+    for key in expected:
+        if key == "pca":
+            # The eigenpair identities checked above permit legitimate sign or
+            # basis changes while binding the reported eigenvalues to the sample.
+            equivalent(saved[key]["eigenvalues"], expected[key]["eigenvalues"], "source PCA eigenvalues", absolute=1e-9)
+            equivalent(saved[key]["explained_variance_ratio"], expected[key]["explained_variance_ratio"], "source PCA ratios", absolute=1e-9)
+            equivalent(saved[key]["basis"], expected[key]["basis"], "source PCA basis")
+        else:
+            equivalent(saved[key], expected[key], f"source covariance {key}", absolute=1e-9)
+
+
+def source_bound_checks(pack, records, quality):
+    """Replay source cash flows and decisions without rerunning the optimizer."""
+    audit = benchmark_curves(records, strict=False)
+    equivalent(pack["data_quality"], quality, "source data quality", absolute=1e-10)
+    equivalent(pack["source_audit"], audit, "source curve audit", absolute=1e-10)
+    config = pack["instrument_config"]
+    terms = [item for era in ("latest", "historical") for group in ("targets", "hedges") for item in config[era][group]]
+    equivalent(pack["auction_benchmarks"], official_auction_benchmarks(terms), "independent auction evidence", absolute=1e-10)
+    rejected = {item["date"] for item in audit["exceptions"]}
+    if pack["latest"]["date"] != records[-1]["date"] or records[-1]["date"] in rejected:
+        raise ValueError("Latest release curve is not the final admissible source date")
+    by_date = {row["date"]: row for row in records}
+    history = level_history(records, audit)
+    latest = pack["latest"]
+    targets, hedges = instruments(config, "latest", "targets"), instruments(config, "latest", "hedges")
+    curve = curve_from_record(by_date[latest["date"]])
+    reconstructed = risk_inputs(targets, hedges, latest["faces"], curve, latest["date"])
+    add_tenors(reconstructed, hedges, latest["date"])
+    equivalent(latest["risk_inputs"], reconstructed, "source latest risk")
+    covariance_bound(latest["covariance"], history, latest["date"])
+    for row, bond, face in zip(latest["portfolio"], targets, latest["faces"]):
+        for key, expected in (("dirty_price", bond.price(curve, latest["date"]) * face / 100),
+                              ("clean_price", bond.clean_price(curve, latest["date"]) * face / 100),
+                              ("accrued_interest", bond.accrued_interest(latest["date"]) * face / 100)):
+            equal(row[key], expected, f"source latest {key}", absolute=2e-6, relative=2e-10)
+    expected_scenarios = []
+    for name, shocked in shock_scenarios(curve):
+        target_change = math.fsum(face / 100 * bond.price(shocked, latest["date"])
+                                  for face, bond in zip(latest["faces"], targets)) - reconstructed["target_price"]
+        changes = [bond.price(shocked, latest["date"]) - price for bond, price in zip(hedges, reconstructed["hedge_prices"])]
+        expected_scenarios.append({"name": name, **{method: target_change + math.fsum(weight * change
+            for weight, change in zip(latest["methods"][method]["weights"], changes)) for method in METHODS}})
+    equivalent(latest["scenarios"], expected_scenarios, "source scenario repricing")
+    historical_targets = instruments(config, "historical", "targets")
+    historical_hedges = instruments(config, "historical", "hedges")
+    replayed_rows = 0
+    for period in pack["periods"]:
+        selected = [row for row in records if period["start_date"] <= row["date"] <= period["end_date"]]
+        dates = sorted({row["date"] for row in period["rows"]})
+        if dates != [row["date"] for row in selected] or any(day in rejected for day in dates):
+            raise ValueError("Historical ledger dates differ from admissible source coverage")
+        decisions = {item["trade_date"]: item for item in period["decisions"]}
+        ledgers = {}
+        policy = FundingPolicy(**period["funding_policy"])
+        expected_rows = []
+        for observed in selected:
+            day = observed["date"]
+            current_curve = curve_from_record(observed)
+            if day in decisions:
+                decision = decisions[day]
+                prior = next((row for row in reversed(records) if row["date"] < day and row["date"] not in rejected), None)
+                if prior is None or decision["decision_curve_date"] != prior["date"]:
+                    raise ValueError("Historical decision does not use the latest admissible prior curve")
+                active = [bond for bond in historical_hedges if bond.issue_date <= date.fromisoformat(day) and bond.cashflows(day)]
+                if decision["active_hedges"] != [bond.cusip for bond in active]:
+                    raise ValueError("Historical active hedges differ from actual sourced terms")
+                inputs = risk_inputs(historical_targets, active, period["faces"], curve_from_record(prior), day)
+                add_tenors(inputs, active, day)
+                equivalent(decision["risk_inputs"], inputs, "source historical decision risk")
+                covariance_bound(decision["covariance"], history, day)
+                for method in METHODS:
+                    positions = [Position(bond, face / 100) for bond, face in zip(historical_targets, period["faces"])]
+                    positions += [Position(bond, weight) for bond, weight in zip(active, decision["methods"][method]["weights"])]
+                    if method not in ledgers:
+                        ledgers[method] = CashLedger(positions, current_curve, day, initial_equity=period["initial_equity"], policy=policy)
+                        row = ledgers[method].initial_row
+                    else:
+                        row = ledgers[method].rebalance(positions, current_curve, day)
+                    expected_rows.append({"method": method, **row})
+            else:
+                for method in METHODS:
+                    expected_rows.append({"method": method, **ledgers[method].mark(current_curve, day)})
+        equivalent(period["rows"], expected_rows, "source historical cash-flow replay")
+        replayed_rows += len(expected_rows)
+    return {"source_bound_decisions": sum(len(period["decisions"]) for period in pack["periods"]),
+            "source_replayed_ledger_rows": replayed_rows, "source_scenarios_repriced": len(expected_scenarios)}
+
+
+def artifact_semantics_checked(pack, payloads):
+    """A rehashed artifact must still display the values of the verified pack."""
+    chart_files = ["risk_and_factors.png", *[f"wealth_{period['start_date'][:4]}.png" for period in pack["periods"]]]
+    rendered = payloads["report.html"].decode("utf-8").replace("\r\n", "\n")
+    if rendered != render_release(pack, chart_files).replace("\r\n", "\n"):
+        raise ValueError("HTML report differs from the verified release renderer")
+    for period in pack["periods"]:
+        name = f"ledger_{period['start_date'][:4]}.csv"
+        try:
+            rows = list(csv.reader(io.StringIO(payloads[name].decode("utf-8"), newline=""), strict=True))
+        except (UnicodeError, csv.Error) as error:
+            raise ValueError(f"Invalid CSV artifact: {name}") from error
+        fields = list(period["rows"][0])
+        expected = [fields] + [[str(row[key]) if row[key] is not None else "" for key in fields] for row in period["rows"]]
+        if rows != expected:
+            raise ValueError(f"CSV ledger schema, row count or values differ from verified pack: {name}")
 
 
 def load_verified_release(output: Path) -> tuple[dict, dict]:
@@ -289,9 +509,15 @@ def load_verified_release(output: Path) -> tuple[dict, dict]:
             raise ValueError(f"Artifact integrity failed: {name}")
         payloads[name] = payload
     pack = json.loads(payloads["release.json"])
+    if manifest.get("version") != pack.get("version"):
+        raise ValueError("Artifact manifest version differs from release pack")
+    with (ROOT / "pyproject.toml").open("rb") as project_stream:
+        if pack.get("version") != tomllib.load(project_stream)["project"]["version"]:
+            raise ValueError("Saved release version differs from installed project version")
     current_source = validate_source_manifest(ROOT / "data/raw/feds200628.csv", ROOT / "data/raw/source_manifest.json")
     if pack["source"]["sha256"] != current_source["sha256"]:
         raise ValueError("Saved release curve source is stale")
+    equivalent(pack["source"], current_source, "saved source metadata", absolute=0, relative=0)
     if pack["code_sha256"] != code_fingerprint(ROOT):
         raise ValueError("Saved release model code is stale")
     config_bytes = (ROOT / "configs/treasury_instruments.json").read_bytes()
@@ -300,6 +526,9 @@ def load_verified_release(output: Path) -> tuple[dict, dict]:
     if pack["instrument_config"] != json.loads(config_bytes):
         raise ValueError("Embedded instrument metadata differs from verified configuration")
     result = verify_pack(pack)
+    records, quality = load_gsw(ROOT / "data/raw/feds200628.csv")
+    result.update(source_bound_checks(pack, records, quality))
+    artifact_semantics_checked(pack, payloads)
     result["artifacts_verified"] = len(payloads)
     return pack, result
 

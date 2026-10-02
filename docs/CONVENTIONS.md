@@ -1,4 +1,4 @@
-# Dated Treasury conventions — v1.0.0
+# Dated Treasury conventions — v1.0.1
 
 These conventions describe the implemented regular fixed-rate cash-Treasury model. They distinguish contractual terms, research curve inputs, model ownership rules and hypothetical financing assumptions.
 

@@ -5,15 +5,29 @@ import json
 from pathlib import Path
 import sys
 import zipfile
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.verify_release import ARTIFACT_NAMES, load_verified_release
+from scripts.publication_lock import publication_lock
 
 WORKBOOK_FOLDER = Path("outputs/01a0fad9-107c-7cd2-b374-8b14defca53a")
 
 
 def package(root: Path = ROOT) -> Path:
+    root = Path(root)
+    dist = root / "dist"
+    if not dist.resolve().is_relative_to(root.resolve()):
+        raise ValueError("Package destination escapes the project directory")
+    dist.mkdir(exist_ok=True)
+    # Use the builder's lock for the entire snapshot, then serialize archives.
+    # This prevents packaging a mixture of two verified release generations.
+    with publication_lock(root / "outputs/release"), publication_lock(dist):
+        return _package_locked(root, dist)
+
+
+def _package_locked(root: Path, dist: Path) -> Path:
     pack, checks = load_verified_release(root / "outputs/release")
     release_bytes = (root / "outputs/release/release.json").read_bytes()
     verification = (root / WORKBOOK_FOLDER / "workbook_verification.json").read_bytes()
@@ -42,7 +56,7 @@ def package(root: Path = ROOT) -> Path:
     for name in ("configs/treasury_instruments.json", "treasury_risk/benchmarks.py"):
         files[name] = (root / name).read_bytes()
     files["START_HERE.txt"] = (
-        "Treasury Curve & Hedge Engine v1.0.0\n\n"
+        f"Treasury Curve & Hedge Engine v{pack['version']}\n\n"
         "Open outputs/release/report.html in a browser and treasury_risk_pack.xlsx in a spreadsheet editor.\n"
         "Keep the report's three PNG files beside it. Read docs/DECISION_MEMO.md for the research interpretation.\n"
         "JSON and CSV files retain the pricing, source checks and full accounting evidence.\n"
@@ -53,12 +67,8 @@ def package(root: Path = ROOT) -> Path:
         name: {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
         for name, payload in sorted(files.items())}}
     files["review_manifest.json"] = (json.dumps(bundle_manifest, indent=2) + "\n").encode()
-    dist = root / "dist"
-    dist.mkdir(exist_ok=True)
-    if not dist.resolve().is_relative_to(root.resolve()):
-        raise ValueError("Package destination escapes the project directory")
     output = dist / f"treasury_curve_risk_v{pack['version']}_review.zip"
-    temporary = output.with_suffix(".tmp")
+    temporary = dist / (output.stem + "." + uuid4().hex + ".tmp")
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
             for name, payload in sorted(files.items()):

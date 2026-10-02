@@ -1,4 +1,4 @@
-# Dated Treasury research methodology — v1.0.0
+# Dated Treasury research methodology — v1.0.1
 
 The release connects sourced fixed-rate Treasury terms, a fitted zero curve, constrained hedge decisions and a signed cash ledger. It evaluates risk and model wealth under declared assumptions. The main evidence is [release.json](../outputs/release/release.json), the [HTML report](../outputs/release/report.html) and exported dated ledger rows.
 
