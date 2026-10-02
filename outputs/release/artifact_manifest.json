@@ -1,13 +1,13 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "status": "complete_research_release",
   "files": {
     "release.json": {
-      "sha256": "b926b91010da6392c9fd2467975c906dbf560032323bbe5641bdaad6a8adbf4e",
+      "sha256": "3b95bf7c5ebf783acbb4e38feaf531115072ab1245f9ca21d67b40e93f93030f",
       "bytes": 4720360
     },
     "report.html": {
-      "sha256": "087cdb6465dfcc5ec037008b45bce2e24798f37aebea9a63439fd2f5e9d12f6f",
+      "sha256": "8f303478f9505a0015ad7910d12810cfcb3ea8b34e061ce1cd3c8dd8f61fa7ad",
       "bytes": 11581
     },
     "risk_and_factors.png": {

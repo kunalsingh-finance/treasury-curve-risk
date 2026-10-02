@@ -2,7 +2,7 @@
 
 A completed dated fixed-income research engine: source Treasury terms, value their cash flows, size constrained hedges, and reconcile the resulting cash and portfolio wealth.
 
-Start with the [v1.0.1 release report](outputs/release/report.html) and [hedge decision memo](docs/DECISION_MEMO.md). The local interface in [app.py](app.py) lets a reviewer change face allocations, valuation date, covariance lookback and hedge limits, then inspect prices, residual risk, scenarios and source exceptions.
+Start with the [v1.0.2 release report](outputs/release/report.html) and [hedge decision memo](docs/DECISION_MEMO.md). The local interface in [app.py](app.py) lets a reviewer change face allocations, valuation date, covariance lookback and hedge limits, then inspect prices, residual risk, scenarios and source exceptions.
 
 ## What the release demonstrates
 

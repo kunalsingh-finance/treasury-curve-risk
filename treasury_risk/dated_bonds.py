@@ -283,12 +283,18 @@ class DatedBond:
         base = self.price(curve, settlement)
         if base == 0:
             return None
-        return _finite(self.parallel_dv01(curve, settlement) / (base * BASIS_POINT), "Dated duration")
+        denominator = base * BASIS_POINT
+        if not math.isfinite(denominator) or denominator <= 0:
+            raise CurveMathError("Dated duration denominator exceeds floating-point precision")
+        return _finite(self.parallel_dv01(curve, settlement) / denominator, "Dated duration")
 
     def convexity(self, curve: DiscountCurve, settlement: date | str) -> float | None:
         base = self.price(curve, settlement)
         if base == 0:
             return None
+        denominator = base * BASIS_POINT**2
+        if not math.isfinite(denominator) or denominator <= 0:
+            raise CurveMathError("Dated convexity denominator exceeds floating-point precision")
         down = self.price(parallel_bumped_curve(curve, -1), settlement)
         up = self.price(parallel_bumped_curve(curve, 1), settlement)
-        return _finite(math.fsum((down - base, up - base)) / (base * BASIS_POINT**2), "Dated convexity")
+        return _finite(math.fsum((down - base, up - base)) / denominator, "Dated convexity")

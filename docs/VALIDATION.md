@@ -1,10 +1,10 @@
-# Dated v1.0.1 release validation
+# Dated v1.0.2 release validation
 
 Validated locally on October 2, 2026 with Python 3.11 and the pinned requirements. The release uses the September 25, 2026 latest curve and separate 2022/2023 annual accounting evaluations.
 
 | Check | Result |
 | --- | --- |
-| Offline numerical and regression suite | 187 tests passed |
+| Offline numerical and regression suite | 189 tests passed |
 | Independent original Treasury auction calculations | 16/16 within $0.000001 per $100 face |
 | Independent saved cash/wealth reconciliation | 1,996 rows across four methods and two years |
 | Strictly prior monthly hedge decisions | 24 verified |
@@ -42,3 +42,5 @@ The checked-in source archive preserves the exact capture; `--refresh` alone acq
 Source-audit replay allows a bounded floating-point difference when large fitted coefficients cancel. Each observation's comparison allowance derives from the coefficient magnitudes and floating-point subtraction of published yields. Source dates, counts, statuses, exception coverage and the 0.006 bp acceptance threshold must still agree exactly. This makes the saved audit reproducible across Windows and Linux without changing source acceptance.
 
 Ten older source dates remain quarantined at the original 0.006 bp tolerance; their cause is unresolved. These numerical controls do not establish executable market prices, historical point-in-time data, borrow availability or realized performance. The [decision memo](DECISION_MEMO.md) explains the model assumptions and financial interpretation. GitHub Actions runs numerical, source, release, dashboard, installation and review-package checks on Linux and Windows; consult the repository's Actions results for remote execution status.
+
+The v1.0.2 follow-up validates duration/convexity errors for subnormal positive face amounts and preserves normal-scale analytic values and expired-bond null results. Independent 100- and 150-digit Decimal calculations using exact CSV parameter strings reproduce all nine numerical source exceptions. The largest engine-versus-Decimal difference across the quarantined dates is 5.39e-12 bp, while benchmark discrepancies remain between 0.007086 and 0.037965 bp. The tenth date, March 21, 2008, has no published yield benchmarks. These results rule out floating-point error in the engine as the cause; source acceptance remains unchanged.

@@ -1,4 +1,4 @@
-# Treasury hedge decision memo — dated v1.0.1
+# Treasury hedge decision memo — dated v1.0.2
 
 **Research date:** September 25, 2026. **Evidence:** October 2, 2026 pinned curve capture and the saved [dated release](../outputs/release/release.json). Dollar amounts below are rounded; the JSON and ledger CSVs retain calculation precision.
 

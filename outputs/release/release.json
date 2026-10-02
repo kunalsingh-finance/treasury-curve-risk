@@ -1,10 +1,10 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "schema_version": 1,
   "status": "complete_research_release",
-  "code_sha256": "26892a0ec793189bc7b53e1e2a1838c40d75c3cf2ff005a3778251ec71489960",
+  "code_sha256": "be1ed04ff703c11400220ab594ea6c424ca52e742c19301b5b7770d12374e05f",
   "instrument_config_sha256": "c08c737a24047e301ef641c0e1ba490724829dc9b46b59accb5b834309bdece5",
-  "generated_at": "2026-10-02T14:06:11.181218+00:00",
+  "generated_at": "2026-10-02T14:35:17.354599+00:00",
   "source": {
     "source_url": "https://www.federalreserve.gov/data/yield-curve-tables/feds200628.csv",
     "source_page": "https://www.federalreserve.gov/data/nominal-yield-curve.htm",

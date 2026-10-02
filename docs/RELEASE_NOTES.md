@@ -1,6 +1,14 @@
-# Treasury Curve & Hedge Engine v1.0.1
+# Treasury Curve & Hedge Engine v1.0.2
 
 A dated cash-Treasury research platform with sourced security terms, constrained hedge decisions and auditable cash accounting.
+
+## Changes in v1.0.2
+
+- Guard duration and convexity denominators at the limits of floating-point precision. Extremely small positive face amounts now return a clear numerical error; paid-off bonds still return null risk measures.
+- Keep the Windows launcher's error output visible when startup or execution fails.
+- Independent 100- and 150-digit calculations confirm the nine source-yield discrepancies persist beyond floating-point error. The tenth source exception lacks all published yield benchmarks; all ten remain quarantined.
+
+Valid default financial results and the pinned source remain unchanged. Earlier GitHub releases are retained.
 
 ## Changes in v1.0.1
 

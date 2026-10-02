@@ -102,6 +102,26 @@ class DatedBondTests(unittest.TestCase):
         self.assertEqual(bond.zero_yield(flat(5), "2024-03-01"), .05)
         self.assertEqual(bond.forward_yield(flat(5), "2024-03-01"), .05)
 
+    def test_underflowed_risk_denominators_raise_the_model_precision_error(self):
+        # The remaining dirty PV is positive and representable, but normalizing
+        # by a bp (or bp squared) cannot be represented for this tiny face.
+        bond = DatedBond("000000005", "Subnormal face fixture", "2023-01-31", "2024-01-31", 0, face=1e-320)
+        self.assertGreater(bond.price(flat(4), "2024-01-30"), 0)
+        for method in (bond.effective_duration, bond.convexity):
+            with self.subTest(method=method.__name__), self.assertRaisesRegex(CurveMathError, "denominator"):
+                method(flat(4), "2024-01-30")
+        # A paid-off position retains the existing undefined-risk result.
+        self.assertIsNone(bond.effective_duration(flat(4), "2024-01-31"))
+        self.assertIsNone(bond.convexity(flat(4), "2024-01-31"))
+
+    def test_dated_normalized_zero_coupon_risk_matches_the_analytic_oracle(self):
+        bond = DatedBond("000000005", "Normal face fixture", "2023-10-31", "2024-10-31", 0)
+        time = (date(2024, 10, 31) - date(2024, 3, 1)).days / 365
+        self.assertAlmostEqual(bond.effective_duration(flat(5), "2024-03-01"),
+                               math.sinh(time * .0001) / .0001, places=10)
+        expected_convexity = 2 * (math.cosh(time * .0001) - 1) / .0001**2
+        self.assertAlmostEqual(bond.convexity(flat(5), "2024-03-01"), expected_convexity, delta=1e-7)
+
     def test_stubs_invalid_dates_and_unsupported_terms_reject(self):
         invalid = [{"issue_date": "2023-09-01"}, {"frequency": 1}, {"coupon_rate": -.01},
                    {"face": 0}, {"cusip": "BAD"}, {"issue_date": "2024-08-31"},
