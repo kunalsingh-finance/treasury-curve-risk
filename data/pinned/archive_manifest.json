@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "archive_file": "feds200628.csv.gz",
+  "archive_bytes": 5920171,
+  "archive_sha256": "f9c461808e65d43badfbef8cd72853c084238f4236c13773509103ffac4d0b68",
+  "uncompressed_bytes": 16650134,
+  "uncompressed_sha256": "379cae673092e64aea0baa58796b276ebc5c9c7f2c342d66e7b1fe1e52fd0421",
+  "source_manifest_sha256": "ccc43133236e77a9fcb431d9fe7e5b83d721a7ecec9c8fdfe7b4ef9f6e4c178e"
+}

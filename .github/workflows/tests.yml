@@ -1,10 +1,17 @@
-name: Treasury research tests
-on: [push, pull_request]
+name: Treasury research validation
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -13,5 +20,17 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - run: python -m pip install -r requirements.txt
-      - run: python -m unittest discover -s tests -v
+      - name: Install runtime and packaging dependencies
+        run: python -m pip install -r requirements.txt "setuptools>=68" wheel
+      - name: Numerical and integrity regressions
+        run: python -m unittest discover -s tests -v
+      - name: Restore pinned source without network
+        run: python scripts/fetch_curve_data.py
+      - name: Verify saved research release
+        run: python scripts/verify_release.py
+      - name: Exercise dashboard controls and failure states
+        run: python scripts/check_dashboard.py
+      - name: Check fresh export and isolated wheel installation
+        run: python scripts/check_installation.py
+      - name: Check matching report and workbook review package
+        run: python scripts/package_release.py

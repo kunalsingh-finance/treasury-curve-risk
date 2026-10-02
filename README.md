@@ -22,23 +22,25 @@ Use Python 3.11 with the versions pinned in [requirements.txt](requirements.txt)
 ```powershell
 python -m pip install -r requirements.txt
 python scripts/fetch_curve_data.py
-python scripts/build_release.py
 python scripts/verify_release.py
 python -m streamlit run app.py
 ```
 
 On Windows, [Launch Treasury Dashboard.cmd](<Launch Treasury Dashboard.cmd>) starts the local interface. The HTML release report can also be opened directly without starting Streamlit.
 
-The downloader retains the local source snapshot unless `--refresh` is supplied. A fresh checkout needs that download because the original CSV is excluded from Git. An existing pinned snapshot supports an offline build. Source integrity is checked before analysis; refresh changes the source vintage and requires rebuilding and verifying the release.
+The first setup restores the checked-in, compressed October 2, 2026 source snapshot into `data/raw/` **without a network request**. Archive bytes, decompressed bytes and acquisition metadata are verified first. Existing raw files must also pass integrity checks. This preserves the exact curve vintage used by the saved report and workbook.
+
+`python scripts/build_release.py` recomputes the Python research outputs from the restored source. To intentionally acquire a newer, mutable Federal Reserve vintage, use `python scripts/fetch_curve_data.py --refresh`, then rebuild and verify. A refresh does not replace the checked-in archive or regenerate the Excel workbook. `scripts/pin_source_snapshot.py --replace` explicitly changes the archived vintage; its related report and workbook evidence must then be renewed.
 
 Run the numerical and integration suite with:
 
 ```powershell
 python -m unittest discover -s tests -v
 python scripts/check_dashboard.py
+python scripts/check_installation.py
 ```
 
-The dashboard integration smoke check requires the pinned raw source and verifies the local application against that data.
+The dashboard integration smoke check requires the restored raw source. The installation check exports the committed repository, restores the source with networking disabled, verifies report artifacts and installs a wheel in an isolated target. It requires the runtime requirements plus setuptools and wheel. The wheel exposes the numerical Python library; the app, scripts and data are run from a source checkout.
 
 The release builder replaces prior report status with `building` and publishes a failure page if a required check fails. The verifier checks saved artifact bytes, current source/config/model fingerprints, cash rolls, dated decision boundaries and hedge constraints. A successfully generated report does not convert source exceptions into passed observations.
 
@@ -67,6 +69,10 @@ The 2022 and 2023 evaluations restart separately with equal initial equity acros
 | Completed numerical, dashboard and workbook checks | [validation record](docs/VALIDATION.md) |
 
 The workbook has live formulas for face-scaled PV, accrued interest, parallel/key-rate exposure, covariance risk and face-limit checks. Editable target/hedge faces and limits update those calculations; its covariance multiplier scales risk under the saved matrix. Per-$100 curve marks and sensitivities, covariance/PCA inputs, historical ledgers and Python-selected weights are frozen exports. Excel edits do not reprice cash flows, reestimate covariance, reoptimize hedges or rerun history; those operations run in Python before a new export.
+
+The delivered Excel file is a verified v1 snapshot. Rebuilding Python outputs leaves that workbook attached to its original `release.json` SHA-256, recorded in `workbook_verification.json`. Its export script uses Codex's bundled `@oai/artifact-tool` through a local runtime junction; ordinary Python or Node installation does not supply that runtime. The [review-package builder](scripts/package_release.py) checks that the workbook and saved Python release share the recorded source pack before bundling them.
+
+GitHub Actions validates the numerical suite, source restoration, saved release, dashboard failure states and isolated wheel installation on Linux and Windows. The [release notes](docs/RELEASE_NOTES.md) describe the packaged v1 scope.
 
 [docs/RESEARCH_NOTE.md](docs/RESEARCH_NOTE.md), `scripts/run_demo.py` and `outputs/report.html` are legacy **undated, frozen-cash-flow diagnostics**. The dated v1 release in `outputs/release/` is the main deliverable.
 

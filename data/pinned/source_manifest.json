@@ -1,0 +1,16 @@
+{
+  "source_url": "https://www.federalreserve.gov/data/yield-curve-tables/feds200628.csv",
+  "source_page": "https://www.federalreserve.gov/data/nominal-yield-curve.htm",
+  "captured_at": "2026-10-02T05:46:36.465711+00:00",
+  "sha256": "379cae673092e64aea0baa58796b276ebc5c9c7f2c342d66e7b1fe1e52fd0421",
+  "bytes": 16650134,
+  "response_headers": {
+    "Date": "Fri, 02 Oct 2026 05:46:37 GMT",
+    "Content-Type": "application/octet-stream",
+    "Content-Length": "16650134",
+    "ETag": "\"ea115c04450dd1:0\"",
+    "Last-Modified": "Tue, 29 Sep 2026 19:00:10 GMT"
+  },
+  "data_vintage": "Downloaded current vintage; historical observations may be revised.",
+  "model_type": "Federal Reserve staff fitted off-the-run nominal Treasury curve"
+}
