@@ -4,7 +4,7 @@ Validated locally on October 2, 2026 with Python 3.11 and the pinned requirement
 
 | Check | Result |
 | --- | --- |
-| Offline numerical and regression suite | 185 tests passed |
+| Offline numerical and regression suite | 187 tests passed |
 | Independent original Treasury auction calculations | 16/16 within $0.000001 per $100 face |
 | Independent saved cash/wealth reconciliation | 1,996 rows across four methods and two years |
 | Strictly prior monthly hedge decisions | 24 verified |
@@ -38,5 +38,7 @@ python scripts/package_release.py
 The saved release is published only after in-memory and staged-artifact verification. Its complete manifest is written last. A single writer holds an OS publication lock throughout the rebuild; a competing writer stops before altering files. A failed rebuild removes only known generated report/ledger/chart files and preserves unrelated reader notes. The lock releases even after process exit. Review packaging holds the same release lock while capturing its inputs and uses unique archive staging files. `.gitattributes` retains exact file bytes so recorded model/artifact fingerprints survive Git checkout.
 
 The checked-in source archive preserves the exact capture; `--refresh` alone acquires a newer mutable vintage. The acquisition regressions reject corrupt archives, incomplete raw pairs, oversized compressed/expanded data, nonofficial URLs and staged failures. Review-package regressions reject a stale workbook/release pair and artifacts changed after verification, preserving unrelated files and the last valid review ZIP when construction fails.
+
+Source-audit replay allows a bounded floating-point difference when large fitted coefficients cancel. Each observation's comparison allowance derives from the coefficient magnitudes and floating-point subtraction of published yields. Source dates, counts, statuses, exception coverage and the 0.006 bp acceptance threshold must still agree exactly. This makes the saved audit reproducible across Windows and Linux without changing source acceptance.
 
 Ten older source dates remain quarantined at the original 0.006 bp tolerance; their cause is unresolved. These numerical controls do not establish executable market prices, historical point-in-time data, borrow availability or realized performance. The [decision memo](DECISION_MEMO.md) explains the model assumptions and financial interpretation. GitHub Actions runs numerical, source, release, dashboard, installation and review-package checks on Linux and Windows; consult the repository's Actions results for remote execution status.

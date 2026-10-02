@@ -8,6 +8,8 @@ The Federal Reserve CSV is retained byte-for-byte with source URL, capture times
 
 Each parameter-valid curve is reconstructed and compared with available published continuously compounded zero yields. The fixed 0.006 bp tolerance accommodates four-decimal-percent rounding up to 0.005 bp plus numerical error. Published par yields are not substituted for zeros. In the pinned snapshot, 71 maturity comparisons fail across nine dates; a tenth date has no published benchmark. All ten dates are retained as exceptions and excluded from valuations, decision curves and covariance histories. The full-source audit remains under review even when the required release dates pass.
 
+The saved-audit verifier separately compares its fresh calculations with the recorded numerical errors. Large cancelling fitted coefficients can amplify small platform differences in exponential functions, so this replay comparison uses a floating-point allowance derived from coefficient magnitude. Dates, counts, classifications and the source's fixed acceptance tolerance must match exactly; replay roundoff never turns a quarantined date into an accepted observation.
+
 Sixteen Treasury term records contain CUSIP, label, actual issue date, dated date, maturity and coupon, together with primary auction links and selected-field transcriptions. Their text hashes test local consistency; they do not authenticate original PDF bytes. Latest and historical sets each contain three targets and five hedges. Face allocations of $2m/$4m/$6m are hypothetical.
 
 ## Dated valuation and sensitivities

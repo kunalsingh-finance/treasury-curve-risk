@@ -421,6 +421,55 @@ class ReleaseValidationTests(unittest.TestCase):
                 with self.verified_sources(root), self.assertRaisesRegex(ValueError, "version"):
                     verify_release.verify(output)
 
+    def cancelling_source_fixture(self):
+        record = {"date": "2011-05-31", "beta0": 4.9931557404547,
+                  "beta1": -4.74452511208213, "beta2": -7152.47502087985,
+                  "beta3": 7149.69707599032, "tau1": 3.18058444537669,
+                  "tau2": 3.18216564654898}
+        curve = curve_from_record(record)
+        record["published_zero_yields"] = {node: curve.zero_yield(node) for node in range(1, 31)}
+        return record, benchmark_curves([record], strict=False)
+
+    def test_source_audit_accepts_only_coefficient_bounded_replay_roundoff(self):
+        record, expected = self.cancelling_source_fixture()
+        budget = verify_release.source_audit_roundoff_budget(record)
+        self.assertGreater(budget, 1e-10)
+        self.assertLess(budget, expected["tolerance_bps"] / 100000)
+        saved = deepcopy(expected)
+        saved["date_checks"][0]["max_absolute_error_bps"] = budget / 2
+        saved["max_absolute_error_bps"] = budget / 2
+        verify_release.source_audit_checked(saved, expected, [record])
+        for multiplier in (2, 1000):
+            with self.subTest(multiplier=multiplier):
+                forged = deepcopy(saved)
+                forged["date_checks"][0]["max_absolute_error_bps"] = budget * multiplier
+                forged["max_absolute_error_bps"] = budget * multiplier
+                with self.assertRaisesRegex(ValueError, "absolute_difference=.*allowed_difference="):
+                    verify_release.source_audit_checked(forged, expected, [record])
+
+    def test_replay_roundoff_cannot_change_source_classification_or_threshold(self):
+        record, expected = self.cancelling_source_fixture()
+        for mutation in ("status", "threshold", "coverage", "classification_crossing"):
+            with self.subTest(mutation=mutation):
+                saved = deepcopy(expected)
+                if mutation == "status":
+                    saved["date_checks"][0]["status"] = "outside_rounding_tolerance"
+                elif mutation == "threshold":
+                    saved["tolerance_bps"] *= 2
+                elif mutation == "coverage":
+                    saved["date_checks"] = []
+                else:
+                    # Even a numerically close value cannot claim "pass" when
+                    # its displayed error crosses the unchanged 0.006 bp rule.
+                    expected = deepcopy(expected)
+                    expected["date_checks"][0]["max_absolute_error_bps"] = expected["tolerance_bps"] - 1e-12
+                    expected["max_absolute_error_bps"] = expected["date_checks"][0]["max_absolute_error_bps"]
+                    saved = deepcopy(expected)
+                    saved["date_checks"][0]["max_absolute_error_bps"] += 2e-12
+                    saved["max_absolute_error_bps"] = saved["date_checks"][0]["max_absolute_error_bps"]
+                with self.assertRaises(ValueError):
+                    verify_release.source_audit_checked(saved, expected, [record])
+
     def test_failed_rebuild_removes_generated_ledgers_and_charts(self):
         with tempfile.TemporaryDirectory(prefix="treasury_release_failure_") as directory:
             root = Path(directory)

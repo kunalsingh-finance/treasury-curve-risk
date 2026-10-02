@@ -6,6 +6,7 @@ A dated cash-Treasury research platform with sourced security terms, constrained
 
 - Reject invalid face amounts, controls and dates before research calculations. Iterable holdings are materialized once; duplicate or unordered observations and nonpositive starting equity reject.
 - Verify portfolio values, comparison hedges, scenarios and covariance evidence against numerical identities and the checked source. Report HTML and ledger CSVs must agree with the saved pack.
+- Bound platform rounding in source-audit replay using fitted coefficient magnitudes; source acceptance and quarantine decisions remain exact.
 - Lock publication so overlapping builds cannot erase another writer's successful release. Review packages use their own staging files and a protected source snapshot.
 - Derive release version and source-exception count from their recorded inputs. Renew the report, workbook and review archive together.
 

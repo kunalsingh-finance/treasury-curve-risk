@@ -52,8 +52,12 @@ def array(value, shape, name):
 
 
 def equal(value, expected, name, *, absolute=1e-7, relative=1e-10):
-    if not math.isclose(scalar(value, name), scalar(expected, name), abs_tol=absolute, rel_tol=relative):
-        raise ValueError(f"{name} cannot be reconstructed")
+    saved, reference = scalar(value, name), scalar(expected, name)
+    if not math.isclose(saved, reference, abs_tol=absolute, rel_tol=relative):
+        difference = abs(saved - reference)
+        allowed = max(absolute, relative * max(abs(saved), abs(reference)))
+        raise ValueError(f"{name} cannot be reconstructed: saved={saved:.17g}, expected={reference:.17g}, "
+                         f"absolute_difference={difference:.17g}, allowed_difference={allowed:.17g}")
 
 
 def equivalent(saved, expected, name, *, absolute=2e-6, relative=2e-10):
@@ -398,11 +402,67 @@ def covariance_bound(saved, history, execution):
             equivalent(saved[key], expected[key], f"source covariance {key}", absolute=1e-9)
 
 
+def source_audit_roundoff_budget(record):
+    """Bound replay roundoff in basis points without changing the source test.
+
+    Different libm implementations can round loadings differently when large
+    fitted coefficients cancel. Svensson zero loadings are bounded by one, so
+    the sum of absolute beta coefficients bounds the intermediate percentage
+    scale. A 128-ULP budget covers both floating evaluations and the final
+    published-yield subtraction; conversion is 100 bp per percentage point.
+    This allowance compares saved/recomputed errors only. The 0.006 bp source
+    decision threshold, classifications, counts and date coverage stay exact.
+    """
+    scale = math.fsum(abs(scalar(record[key], key)) for key in ("beta0", "beta1", "beta2", "beta3"))
+    published = max((abs(scalar(value, "published zero yield")) for value in
+                     record["published_zero_yields"].values() if value is not None), default=0.0)
+    return max(1e-10, 128 * (math.ulp(scale) * 100 + math.ulp(published) * 10000))
+
+
+def source_audit_checked(saved, expected, records):
+    """Require exact source decisions and magnitude-bounded numerical replay."""
+    if set(saved) != set(expected):
+        raise ValueError("Source curve audit has different fields from its reconstruction")
+    budgets = {record["date"]: source_audit_roundoff_budget(record) for record in records}
+    numeric_fields = {"date_checks", "exceptions", "max_absolute_error_bps"}
+    for key in expected:
+        if key not in numeric_fields:
+            equivalent(saved[key], expected[key], f"source curve audit.{key}", absolute=0, relative=0)
+    for group in ("date_checks", "exceptions"):
+        if not isinstance(saved[group], list) or len(saved[group]) != len(expected[group]):
+            raise ValueError(f"Source curve audit {group} coverage differs from source")
+        for index, (row, reference) in enumerate(zip(saved[group], expected[group])):
+            if set(row) != set(reference):
+                raise ValueError(f"Source curve audit {group}[{index}] schema differs")
+            for key in reference:
+                if key != "max_absolute_error_bps":
+                    equivalent(row[key], reference[key], f"source curve audit.{group}[{index}].{key}", absolute=0, relative=0)
+            value, reference_value = row["max_absolute_error_bps"], reference["max_absolute_error_bps"]
+            if reference_value is None:
+                equivalent(value, None, f"source curve audit.{group}[{index}].max_absolute_error_bps")
+                status = "benchmark_unavailable"
+            else:
+                value = scalar(value, "source max error")
+                if value < 0:
+                    raise ValueError("Source error cannot be negative")
+                equal(value, reference_value, f"source curve audit.{group}[{index}].max_absolute_error_bps",
+                      absolute=budgets[reference["date"]], relative=0)
+                status = "outside_rounding_tolerance" if value > expected["tolerance_bps"] else "pass"
+            if row["status"] != status:
+                raise ValueError("Saved source classification differs from the unchanged decision threshold")
+    reconstructed_maximum = max((row["max_absolute_error_bps"] for row in saved["date_checks"]
+                                  if row["max_absolute_error_bps"] is not None), default=0.0)
+    equal(saved["max_absolute_error_bps"], reconstructed_maximum, "saved source aggregate maximum", absolute=0, relative=0)
+    # max() is 1-Lipschitz in the largest component-wise roundoff allowance.
+    equal(saved["max_absolute_error_bps"], expected["max_absolute_error_bps"], "source curve audit.max_absolute_error_bps",
+          absolute=max(budgets.values(), default=1e-10), relative=0)
+
+
 def source_bound_checks(pack, records, quality):
     """Replay source cash flows and decisions without rerunning the optimizer."""
     audit = benchmark_curves(records, strict=False)
     equivalent(pack["data_quality"], quality, "source data quality", absolute=1e-10)
-    equivalent(pack["source_audit"], audit, "source curve audit", absolute=1e-10)
+    source_audit_checked(pack["source_audit"], audit, records)
     config = pack["instrument_config"]
     terms = [item for era in ("latest", "historical") for group in ("targets", "hedges") for item in config[era][group]]
     equivalent(pack["auction_benchmarks"], official_auction_benchmarks(terms), "independent auction evidence", absolute=1e-10)
