@@ -4,7 +4,7 @@ Validated locally on October 2, 2026 with Python 3.11 and the pinned requirement
 
 | Check | Result |
 | --- | --- |
-| Offline numerical and regression suite | 162 tests passed |
+| Offline numerical and regression suite | 163 tests passed |
 | Independent original Treasury auction calculations | 16/16 within $0.000001 per $100 face |
 | Independent saved cash/wealth reconciliation | 1,996 rows across four methods and two years |
 | Strictly prior monthly hedge decisions | 24 verified |

@@ -2,9 +2,9 @@
   "version": "1.0.0",
   "schema_version": 1,
   "status": "complete_research_release",
-  "code_sha256": "1a09eed92c25530845e2c6f99ecb40d111930a57c939e7c17e44055fa0cbf813",
+  "code_sha256": "b56c1a4a42f3cc7e1fc4b8e25cefa14d9d448dca81dedd01827b2b8a420e7ca4",
   "instrument_config_sha256": "c08c737a24047e301ef641c0e1ba490724829dc9b46b59accb5b834309bdece5",
-  "generated_at": "2026-10-02T12:49:17.346498+00:00",
+  "generated_at": "2026-10-02T13:35:28.280926+00:00",
   "source": {
     "source_url": "https://www.federalreserve.gov/data/yield-curve-tables/feds200628.csv",
     "source_page": "https://www.federalreserve.gov/data/nominal-yield-curve.htm",
@@ -41732,6 +41732,12 @@
             "status": 0,
             "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
           },
+          "initial_optimality_lp": {
+            "success": true,
+            "status": 0,
+            "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+          },
+          "initial_normalized_first_order_gap": 0.045222642612321694,
           "optimization": {
             "success": true,
             "status": 0,
@@ -77627,6 +77633,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.026031390116458393,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -78598,6 +78610,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.02787276160172732,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -79569,6 +79587,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.028818594649012486,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -80540,6 +80564,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.030572257907217265,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -81511,6 +81541,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.03782954908009446,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -82482,6 +82518,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.039283634518448886,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -83453,6 +83495,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.042136526525968256,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -84424,6 +84472,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.05185544973612583,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -85395,6 +85449,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.055463444438135716,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -86366,6 +86426,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06365518916914631,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -87337,6 +87403,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.07557806815924951,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -88308,6 +88380,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06616748551578235,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -124380,6 +124458,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.062298232404230304,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -125351,6 +125435,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.054993139491792874,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -126322,6 +126412,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.05798852925962569,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -127293,6 +127389,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06642964735048869,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -128264,6 +128366,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06653360704559227,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -129235,6 +129343,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.0724747915153653,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -130206,6 +130320,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.07023117660173324,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -131177,6 +131297,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.07172165066358019,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -132148,6 +132274,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06963982510160231,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -133119,6 +133251,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.07856993112760223,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -134090,6 +134228,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.07709284798440064,
                 "optimization": {
                   "success": true,
                   "status": 0,
@@ -135040,6 +135184,12 @@
                   "status": 0,
                   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
                 },
+                "initial_optimality_lp": {
+                  "success": true,
+                  "status": 0,
+                  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+                },
+                "initial_normalized_first_order_gap": 0.06646230629872477,
                 "optimization": {
                   "success": true,
                   "status": 0,

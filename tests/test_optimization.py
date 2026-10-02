@@ -47,6 +47,23 @@ class OptimizationTests(unittest.TestCase):
         self.assertAlmostEqual(result["variance_after"], 21.25)
         self.assertTrue(all(value >= 0 for value in result["position_face_capacity_remaining"]))
 
+    def test_unique_boundary_solution_is_certified_without_slsqp_roundoff(self):
+        # The equality needs all 100 and 250 face capacity, so only (-1,-2.5)
+        # is feasible. A Linux SLSQP roundoff failure cannot improve that point.
+        roundoff = SimpleNamespace(success=False, status=8, message="Positive directional derivative for linesearch",
+                                   x=np.array([-1 / 3.5, -2.5 / 3.5, 1 / 3.5, 2.5 / 3.5]), nit=1)
+        with patch("treasury_risk.optimization.minimize", return_value=roundoff) as nonlinear:
+            result = example(position_face_limits=[100, 250], gross_face_limit=350)
+        nonlinear.assert_not_called()
+        self.assertEqual(result["status"], "optimal")
+        np.testing.assert_allclose(result["weights"], [-1, -2.5], atol=1e-7)
+        self.assertAlmostEqual(result["variance_after"], 21.25)
+        self.assertEqual(result["solver_diagnostics"]["optimization"]["iterations"], 0)
+        self.assertTrue(result["solver_diagnostics"]["optimality_lp"]["success"])
+        self.assertLessEqual(result["solver_diagnostics"]["normalized_first_order_gap"], 1e-7)
+        self.assertLessEqual(abs(result["parallel_residual_dv01"]),
+                             result["solver_diagnostics"]["parallel_tolerance"])
+
     def test_infeasible_gross_or_position_capacity_withholds_positions(self):
         for parameters in ({"gross_face_limit": 299}, {"position_face_limits": [0, 299]}):
             with self.subTest(parameters=parameters):

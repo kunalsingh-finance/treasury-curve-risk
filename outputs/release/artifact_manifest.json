@@ -3,8 +3,8 @@
   "status": "complete_research_release",
   "files": {
     "release.json": {
-      "sha256": "98ad338c790b3cc1513a1faa76a3df7132396fffe2474c5928ae5379deeb2209",
-      "bytes": 4712789
+      "sha256": "210a360c4c912d918f376350e2a4d74b5580828c80e7946232292b601b545388",
+      "bytes": 4720361
     },
     "report.html": {
       "sha256": "2d4672518f141a46b999d1a75e0a3a85212a8f9696b10f3f71f13758a00251c1",

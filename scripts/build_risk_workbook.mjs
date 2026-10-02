@@ -210,7 +210,7 @@ block(summary, 7, 3, [['CUSIP', 'Face (USD)', 'Clean PV (USD)', 'Accrued (USD)',
 for (let i = 0; i < 3; i++) { const r = i + 8, ir = i + 10; formula(summary, `C${r}`, `='Inputs'!C${ir}`); formula(summary, `D${r}`, `='Inputs'!E${ir}`); formula(summary, `E${r}`, `=D${r}*'Inputs'!I${ir}/100`); formula(summary, `F${r}`, `=D${r}*'Inputs'!J${ir}/100`); formula(summary, `G${r}`, `=D${r}*'Inputs'!H${ir}/100`); }
 value(summary, 'C11', 'Total'); for (const c of ['D', 'E', 'F', 'G']) formula(summary, `${c}11`, `=SUM(${c}8:${c}10)`); total(summary, 'C11:G11'); summary.getRange('D8:G11').setNumberFormat(money);
 section(summary, 'C14', 'Live hedge risk', 'G');
-block(summary, 15, 3, [['Target parallel DV01'], ['Residual parallel DV01'], ['Gross hedge face'], ['Residual step standard deviation'], ['Forecast variance reduction'], ['Gross limit excess'], ['Single-position limit excess']]);
+block(summary, 15, 3, [['Target parallel DV01'], ['Residual parallel DV01'], ['Gross hedge face'], ['Residual step standard deviation'], ['Estimated variance reduction'], ['Gross limit excess'], ['Single-position limit excess']]);
 for (const [r, sourceCell] of [[15, 'D20'], [16, 'D22'], [17, 'D23'], [18, 'D37'], [19, 'D34'], [20, 'D27'], [21, 'D28']]) formula(summary, `D${r}`, `='Risk'!${sourceCell}`);
 summary.getRange('D15:D21').setNumberFormat(num); summary.getRange('D19').setNumberFormat(pct); warn(summary, 'D20:D21', 'D20>0.01');
 section(summary, 'C24', 'Frozen 2022 and 2023 model wealth', 'K');
@@ -290,7 +290,7 @@ for (const [name, range] of [['Summary', 'C7:K33'], ['Risk', 'C7:O37'], ['Inputs
 const errors = await wb.inspect({ kind: 'match', searchTerm: '#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A|#NUM!|#NULL!|#SPILL!|#CALC!', options: { useRegex: true, maxResults: 300 }, summary: 'Final formula error scan', maxChars: 6000 });
 assert(errors.ndjson.includes('Cell search matched 0 entries.'), 'Formula error scan must have no matches');
 await fs.mkdir(outputDir, { recursive: true });
-await fs.writeFile(path.join(outputDir, 'workbook_verification.json'), JSON.stringify({ releaseSha256, generatedAt: data.generated_at, basePV, changedPV, baseDV01, changedDV01, baseKRD, changedKRD, baseForecast, scaledForecast, faceRestored: true, covarianceMultiplierRestored: true, ledgerRows: ledgerRows.length, monthlyDecisions: decisions.length, errors: errors.ndjson, inspected }, null, 2));
+const verification = { releaseSha256, generatedAt: data.generated_at, basePV, changedPV, baseDV01, changedDV01, baseKRD, changedKRD, baseForecast, scaledForecast, faceRestored: true, covarianceMultiplierRestored: true, ledgerRows: ledgerRows.length, monthlyDecisions: decisions.length, errors: errors.ndjson, inspected };
 console.log(JSON.stringify({ basePV, changedPV, baseDV01, changedDV01, errors: errors.ndjson, ledgerRows: ledgerRows.length }));
 const previews = [['Summary', 'C2:K38'], ['Risk', 'C2:O40'], ['Inputs', 'C2:M31'], ['Inputs', 'C34:L80'], ['Inputs', 'C83:M112'], ['Ledger', `C${ledgerSummaryHeader - 1}:O${ledgerSummaryStart + summaryRows.length - 1}`], ['Ledger', 'C2:O17'], ['Audit', 'C2:H63'], ['Ledger', 'P6:AA17'], ['Ledger', `AB6:${ledgerEndCol}17`], ['Inputs', 'C115:L120'], ['Audit', 'C66:M91']];
 for (let i = 0; i < previews.length; i++) { const [sheetName, range] = previews[i]; const image = await wb.render({ sheetName, range, scale: 1.4, format: 'png' }); await fs.writeFile(path.join(outputDir, `preview_${String(i + 1).padStart(2, '0')}_${sheetName.toLowerCase()}.png`), new Uint8Array(await image.arrayBuffer())); }
@@ -298,5 +298,10 @@ if (process.argv.includes('--export')) {
   const xlsx = await SpreadsheetFile.exportXlsx(wb);
   const xlsxPath = path.join(outputDir, 'treasury_risk_pack.xlsx');
   await xlsx.save(xlsxPath);
+  verification.workbookSha256 = createHash('sha256').update(await fs.readFile(xlsxPath)).digest('hex');
+  await fs.writeFile(path.join(outputDir, 'workbook_verification.json'), JSON.stringify(verification, null, 2));
   console.log(`Saved ${xlsxPath}`);
-} else console.log('Preview verification complete. Final XLSX export requires --export after the final release is frozen.');
+} else {
+  await fs.writeFile(path.join(outputDir, 'preview_verification.json'), JSON.stringify(verification, null, 2));
+  console.log('Preview verification complete. Final XLSX export requires --export after the final release is frozen.');
+}

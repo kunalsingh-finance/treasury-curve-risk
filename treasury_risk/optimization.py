@@ -2,8 +2,9 @@
 
 Exposure columns, parallel sensitivities and prices describe 100 face units.
 The objective is residual dollar variance plus a ridge penalty on those weights.
-An LP proves feasibility before SLSQP; a second LP bounds first-order optimality
-afterward. Failed or infeasible solves contain no proposed hedge positions.
+An LP proves feasibility. An independent first-order LP can certify that point
+directly; otherwise SLSQP searches for a candidate that must pass the same check.
+Failed or infeasible solves contain no proposed hedge positions.
 """
 
 from __future__ import annotations
@@ -103,7 +104,9 @@ def optimize_covariance_hedge(target_exposure: object, hedge_matrix: object, cov
     requires hedge_prices @ w == 0. Covariance units are squared basis points;
     exposures are dollars per basis point. Equality checks have explicit finite
     numerical tolerances, reported with the actual residuals. No position is
-    returned unless feasibility, solver success, residuals and optimality pass.
+    returned unless feasibility, residuals and independent optimality pass.
+    A feasible LP point that already satisfies the convex certificate avoids
+    unnecessary nonlinear iteration, including on a singleton feasible set.
     """
     target = _array(target_exposure, "target_exposure", (9,))
     matrix = _array(hedge_matrix, "hedge_matrix")
@@ -205,7 +208,25 @@ def optimize_covariance_hedge(target_exposure: object, hedge_matrix: object, cov
     def gradient(point: np.ndarray) -> np.ndarray:
         return np.r_[2 * (quadratic @ point[:count] + linear) / objective_scale, np.zeros(count)]
 
-    if gross_limit == 0 or np.all(limits == 0):
+    # Tight face limits and equalities can fix every weight. SLSQP may report
+    # roundoff or incompatible inequalities at that feasible boundary despite
+    # there being no improving direction. Check the independently solved convex
+    # gap before starting nonlinear iterations; keep the same final tolerances.
+    starting_derivative = gradient(starting)
+    initial_certificate = linprog(starting_derivative, A_ub=inequalities, b_ub=inequality_targets,
+                                  A_eq=equalities, b_eq=scaled_targets, bounds=bounds, method="highs")
+    result["solver_diagnostics"]["initial_optimality_lp"] = _lp_diagnostics(initial_certificate)
+    initial_gap = None
+    if initial_certificate.success and primal_valid(np.asarray(initial_certificate.x, dtype=float)):
+        initial_gap = max(float(starting_derivative @ (starting - initial_certificate.x)), 0.0)
+        result["solver_diagnostics"]["initial_normalized_first_order_gap"] = initial_gap
+    certificate = None
+    if initial_gap is not None and math.isfinite(initial_gap) and initial_gap <= 1e-7:
+        point = starting
+        certificate = initial_certificate
+        result["solver_diagnostics"]["optimization"] = {"success": True, "status": 0,
+            "message": "Feasible LP point independently certified optimal; nonlinear iteration unnecessary", "iterations": 0}
+    elif gross_limit == 0 or np.all(limits == 0):
         point = starting
         result["solver_diagnostics"]["optimization"] = {"success": True, "status": 0,
             "message": "Constraints fix every hedge position to zero", "iterations": 0}
@@ -226,8 +247,9 @@ def optimize_covariance_hedge(target_exposure: object, hedge_matrix: object, cov
 
     # Convex first-order gap independently bounds objective suboptimality.
     derivative = gradient(point)
-    certificate = linprog(derivative, A_ub=inequalities, b_ub=inequality_targets, A_eq=equalities,
-                          b_eq=scaled_targets, bounds=bounds, method="highs")
+    if certificate is None:
+        certificate = linprog(derivative, A_ub=inequalities, b_ub=inequality_targets, A_eq=equalities,
+                              b_eq=scaled_targets, bounds=bounds, method="highs")
     result["solver_diagnostics"]["optimality_lp"] = _lp_diagnostics(certificate)
     if not certificate.success or not primal_valid(np.asarray(certificate.x, dtype=float)):
         return fail("solver_failed", "Independent optimality check failed; positions withheld")
